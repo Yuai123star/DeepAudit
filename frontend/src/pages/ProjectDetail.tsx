@@ -35,7 +35,8 @@ import { api } from "@/shared/config/database";
 import { runRepositoryAudit, scanStoredZipFile } from "@/features/projects/services";
 import type { Project, AuditTask, CreateProjectForm, AuditIssue } from "@/shared/types";
 import type { AgentFinding, AgentTask } from "@/shared/api/agentTasks";
-import { getAgentFindings, getAgentTasks } from "@/shared/api/agentTasks";
+import { getAgentTasks } from "@/shared/api/agentTasks";
+import { apiClient } from "@/shared/api/serverClient";
 import { hasZipFile } from "@/shared/utils/zipStorage";
 import { isRepositoryProject, getSourceTypeLabel, getRepositoryPlatformLabel } from "@/shared/utils/projectUtils";
 import { toast } from "sonner";
@@ -97,6 +98,60 @@ export default function ProjectDetail() {
   const [showFileSelectionDialog, setShowFileSelectionDialog] = useState(false);
   const [showAuditOptionsDialog, setShowAuditOptionsDialog] = useState(false);
 
+  // ============ Helpers ============
+  const REQUEST_TIMEOUT_MS = 12_000;
+  const ISSUES_MAX_TASKS = 20;
+  const ISSUES_FETCH_CONCURRENCY = 5;
+
+  async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+    let timeoutId: number | undefined;
+    const timeoutPromise = new Promise<T>((_resolve, reject) => {
+      timeoutId = window.setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+    });
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId != null) window.clearTimeout(timeoutId);
+    }
+  }
+
+  async function mapWithConcurrency<T, R>(
+    items: T[],
+    concurrency: number,
+    mapper: (item: T) => Promise<R>
+  ): Promise<PromiseSettledResult<R>[]> {
+    const results: PromiseSettledResult<R>[] = new Array(items.length);
+    let nextIndex = 0;
+
+    async function worker(): Promise<void> {
+      while (true) {
+        const currentIndex = nextIndex++;
+        if (currentIndex >= items.length) return;
+        try {
+          const value = await mapper(items[currentIndex]);
+          results[currentIndex] = { status: "fulfilled", value };
+        } catch (reason) {
+          results[currentIndex] = { status: "rejected", reason };
+        }
+      }
+    }
+
+    const workers = Array.from({ length: Math.max(1, concurrency) }, () => worker());
+    await Promise.all(workers);
+    return results;
+  }
+
+  async function fetchAuditIssues(taskId: string): Promise<AuditIssue[]> {
+    // Use apiClient directly so we can control timeout behavior at the call site
+    const res = await withTimeout(apiClient.get(`/tasks/${taskId}/issues`), REQUEST_TIMEOUT_MS, `GET /tasks/${taskId}/issues`);
+    return res.data;
+  }
+
+  async function fetchAgentFindings(taskId: string): Promise<AgentFinding[]> {
+    const res = await withTimeout(apiClient.get(`/agent-tasks/${taskId}/findings`), REQUEST_TIMEOUT_MS, `GET /agent-tasks/${taskId}/findings`);
+    return res.data;
+  }
+
   useEffect(() => {
     if (activeTab === 'issues' && (auditTasks.length > 0 || agentTasks.length > 0)) {
       loadLatestIssues();
@@ -111,17 +166,16 @@ export default function ProjectDetail() {
       .filter((t: AgentTask) => t.status === 'completed')
       .sort((a: AgentTask, b: AgentTask) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    const MAX_TASKS = 20;
-    const limitedAuditTasks = completedAuditTasks.slice(0, MAX_TASKS);
-    const limitedAgentTasks = completedAgentTasks.slice(0, MAX_TASKS);
+    const limitedAuditTasks = completedAuditTasks.slice(0, ISSUES_MAX_TASKS);
+    const limitedAgentTasks = completedAgentTasks.slice(0, ISSUES_MAX_TASKS);
 
     setIssuesSummary({
       completedAuditTasksCount: completedAuditTasks.length,
       completedAgentTasksCount: completedAgentTasks.length,
       fetchedAuditTasksCount: limitedAuditTasks.length,
       fetchedAgentTasksCount: limitedAgentTasks.length,
-      isLimited: completedAuditTasks.length > MAX_TASKS || completedAgentTasks.length > MAX_TASKS,
-      maxTasks: MAX_TASKS
+      isLimited: completedAuditTasks.length > ISSUES_MAX_TASKS || completedAgentTasks.length > ISSUES_MAX_TASKS,
+      maxTasks: ISSUES_MAX_TASKS
     });
 
     if (limitedAuditTasks.length === 0 && limitedAgentTasks.length === 0) {
@@ -133,28 +187,24 @@ export default function ProjectDetail() {
     setLoadingIssues(true);
     try {
       const [issuesResults, findingsResults] = await Promise.all([
-        Promise.allSettled(
-          limitedAuditTasks.map(async (t: AuditTask) => {
-          const issues = await api.getAuditIssues(t.id);
-          const enriched: AggregatedAuditIssue[] = (issues || []).map((i) => ({
-            ...(i as AuditIssue),
-            task_created_at: t.created_at,
-            task_completed_at: t.completed_at
+        mapWithConcurrency(limitedAuditTasks, ISSUES_FETCH_CONCURRENCY, async (task: AuditTask) => {
+          const issues = await fetchAuditIssues(task.id);
+          const enriched: AggregatedAuditIssue[] = (issues || []).map((issue) => ({
+            ...(issue as AuditIssue),
+            task_created_at: task.created_at,
+            task_completed_at: task.completed_at
           }));
           return enriched;
-          })
-        ),
-        Promise.allSettled(
-          limitedAgentTasks.map(async (t: AgentTask) => {
-            const findings = await getAgentFindings(t.id);
-            const enriched: AggregatedAgentFinding[] = (findings || []).map((f) => ({
-              ...(f as AgentFinding),
-              task_created_at: t.created_at,
-              task_completed_at: t.completed_at
-            }));
-            return enriched;
-          })
-        )
+        }),
+        mapWithConcurrency(limitedAgentTasks, ISSUES_FETCH_CONCURRENCY, async (task: AgentTask) => {
+          const findings = await fetchAgentFindings(task.id);
+          const enriched: AggregatedAgentFinding[] = (findings || []).map((finding) => ({
+            ...(finding as AgentFinding),
+            task_created_at: task.created_at,
+            task_completed_at: task.completed_at
+          }));
+          return enriched;
+        })
       ]);
 
       const flatIssues = issuesResults
@@ -166,30 +216,32 @@ export default function ProjectDetail() {
 
       const severityRank: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
       flatIssues.sort((a: AggregatedAuditIssue, b: AggregatedAuditIssue) => {
-        const sa = severityRank[a.severity] ?? 0;
-        const sb = severityRank[b.severity] ?? 0;
-        if (sa !== sb) return sb - sa;
+        const createdAtA = new Date(a.created_at).getTime();
+        const createdAtB = new Date(b.created_at).getTime();
+        if (createdAtA !== createdAtB) return createdAtB - createdAtA;
 
-        const ta = new Date(a.created_at).getTime();
-        const tb = new Date(b.created_at).getTime();
-        if (ta !== tb) return tb - ta;
+        const severityA = severityRank[a.severity] ?? 0;
+        const severityB = severityRank[b.severity] ?? 0;
+        if (severityA !== severityB) return severityB - severityA;
 
-        const tta = a.task_created_at ? new Date(a.task_created_at).getTime() : 0;
-        const ttb = b.task_created_at ? new Date(b.task_created_at).getTime() : 0;
-        return ttb - tta;
+        const taskCreatedAtA = a.task_created_at ? new Date(a.task_created_at).getTime() : 0;
+        const taskCreatedAtB = b.task_created_at ? new Date(b.task_created_at).getTime() : 0;
+        return taskCreatedAtB - taskCreatedAtA;
       });
 
       setLatestIssues(flatIssues);
       flatFindings.sort((a: AggregatedAgentFinding, b: AggregatedAgentFinding) => {
-        const sa = severityRank[String(a.severity || '').toLowerCase()] ?? 0;
-        const sb = severityRank[String(b.severity || '').toLowerCase()] ?? 0;
-        if (sa !== sb) return sb - sa;
-        const ta = new Date(a.created_at).getTime();
-        const tb = new Date(b.created_at).getTime();
-        if (ta !== tb) return tb - ta;
-        const tta = a.task_created_at ? new Date(a.task_created_at).getTime() : 0;
-        const ttb = b.task_created_at ? new Date(b.task_created_at).getTime() : 0;
-        return ttb - tta;
+        const createdAtA = new Date(a.created_at).getTime();
+        const createdAtB = new Date(b.created_at).getTime();
+        if (createdAtA !== createdAtB) return createdAtB - createdAtA;
+
+        const severityA = severityRank[String(a.severity || '').toLowerCase()] ?? 0;
+        const severityB = severityRank[String(b.severity || '').toLowerCase()] ?? 0;
+        if (severityA !== severityB) return severityB - severityA;
+
+        const taskCreatedAtA = a.task_created_at ? new Date(a.task_created_at).getTime() : 0;
+        const taskCreatedAtB = b.task_created_at ? new Date(b.task_created_at).getTime() : 0;
+        return taskCreatedAtB - taskCreatedAtA;
       });
       setLatestFindings(flatFindings);
     } catch (error) {
@@ -220,15 +272,26 @@ export default function ProjectDetail() {
       // Pattern examples:
       // "path/to/File.java:66 - Something"
       // "path/to/File.java:137-138 - Something"
-      const m = title.match(/^(.*?):(\d+)(?:-(\d+))?\s*-\s*(.+)$/);
-      if (!m) return null;
-      const [, path, lineStartStr, lineEndStr, rest] = m;
+      // Security hardening:
+      // - Cap title length
+      // - Restrict acceptable path characters
+      // - Reject absolute paths and path traversal segments
+      const safeTitle = String(title || "").slice(0, 500);
+      const match = safeTitle.match(/^([A-Za-z0-9_.\-\/]+):(\d+)(?:-(\d+))?\s*-\s*(.+)$/);
+      if (!match) return null;
+      const [, rawPath, lineStartStr, lineEndStr, rest] = match;
+
+      if (rawPath.startsWith("/") || rawPath.includes("..") || rawPath.includes("\u0000")) return null;
+
       const lineStart = Number(lineStartStr);
       const lineEnd = lineEndStr ? Number(lineEndStr) : null;
+      const normalizedLineStart = Number.isFinite(lineStart) ? lineStart : NaN;
+      const normalizedLineEnd = lineEnd != null && Number.isFinite(lineEnd) ? lineEnd : null;
+      if (!Number.isFinite(normalizedLineStart) || normalizedLineStart <= 0) return null;
       return {
-        file_path: path,
-        line_start: Number.isFinite(lineStart) ? lineStart : null,
-        line_end: lineEnd != null && Number.isFinite(lineEnd) ? lineEnd : null,
+        file_path: rawPath,
+        line_start: normalizedLineStart,
+        line_end: normalizedLineEnd != null && normalizedLineEnd > 0 ? normalizedLineEnd : null,
         rest_title: rest,
       };
     };
@@ -289,15 +352,17 @@ export default function ProjectDetail() {
     // 按时间倒序（最新在前），时间相同再按严重程度
     const severityRank: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
     merged.sort((a, b) => {
-      const ta = new Date(a.created_at).getTime();
-      const tb = new Date(b.created_at).getTime();
-      if (ta !== tb) return tb - ta;
-      const sa = severityRank[a.severity] ?? 0;
-      const sb = severityRank[b.severity] ?? 0;
-      if (sa !== sb) return sb - sa;
-      const tta = a.task_created_at ? new Date(a.task_created_at).getTime() : 0;
-      const ttb = b.task_created_at ? new Date(b.task_created_at).getTime() : 0;
-      return ttb - tta;
+      const createdAtA = new Date(a.created_at).getTime();
+      const createdAtB = new Date(b.created_at).getTime();
+      if (createdAtA !== createdAtB) return createdAtB - createdAtA;
+
+      const severityA = severityRank[a.severity] ?? 0;
+      const severityB = severityRank[b.severity] ?? 0;
+      if (severityA !== severityB) return severityB - severityA;
+
+      const taskCreatedAtA = a.task_created_at ? new Date(a.task_created_at).getTime() : 0;
+      const taskCreatedAtB = b.task_created_at ? new Date(b.task_created_at).getTime() : 0;
+      return taskCreatedAtB - taskCreatedAtA;
     });
     return merged;
   }, [latestIssues, latestFindings]);
@@ -349,15 +414,34 @@ export default function ProjectDetail() {
 
     try {
       setLoading(true);
-      const [projectData, tasksData, agentTasksData] = await Promise.all([
+      const [projectRes, auditTasksRes, agentTasksRes] = await Promise.allSettled([
         api.getProjectById(id),
         api.getAuditTasks(id),
-        getAgentTasks({ project_id: id }).catch(() => [])
+        getAgentTasks({ project_id: id })
       ]);
 
-      setProject(projectData);
-      setAuditTasks(Array.isArray(tasksData) ? tasksData : []);
-      setAgentTasks(Array.isArray(agentTasksData) ? agentTasksData : []);
+      if (projectRes.status === 'fulfilled') {
+        setProject(projectRes.value);
+      } else {
+        console.error('Failed to load project:', projectRes.reason);
+        setProject(null);
+      }
+
+      if (auditTasksRes.status === 'fulfilled') {
+        setAuditTasks(Array.isArray(auditTasksRes.value) ? auditTasksRes.value : []);
+      } else {
+        console.error('Failed to load audit tasks:', auditTasksRes.reason);
+        setAuditTasks([]);
+      }
+
+      if (agentTasksRes.status === 'fulfilled') {
+        setAgentTasks(Array.isArray(agentTasksRes.value) ? agentTasksRes.value : []);
+      } else {
+        // do not silently swallow: log for debugging and degrade gracefully
+        console.warn('Failed to load agent tasks:', agentTasksRes.reason);
+        setAgentTasks([]);
+      }
+
     } catch (error) {
       console.error('Failed to load project data:', error);
       toast.error("加载项目数据失败");
