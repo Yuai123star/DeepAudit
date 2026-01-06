@@ -266,7 +266,7 @@ export async function* streamAgentEvents(
   afterSequence = 0,
   signal?: AbortSignal
 ): AsyncGenerator<AgentEvent, void, unknown> {
-  const token = localStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
   const baseUrl = import.meta.env.VITE_API_URL || "";
   const url = `${baseUrl}/api/v1/agent-tasks/${taskId}/events?after_sequence=${afterSequence}`;
 
