@@ -13,19 +13,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
 import {
   ArrowLeft,
   Edit,
   ExternalLink,
-  Code,
   Shield,
   Activity,
   AlertTriangle,
   CheckCircle,
   Clock,
   XCircle,
-  Play,
   FileText,
   Upload,
   GitBranch,
@@ -45,6 +42,15 @@ import FileSelectionDialog from "@/components/audit/FileSelectionDialog";
 import TerminalProgressDialog from "@/components/audit/TerminalProgressDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { SUPPORTED_LANGUAGES, REPOSITORY_PLATFORMS } from "@/shared/constants";
+import type { AggregatedAgentFinding, AggregatedAuditIssue, IssuesSummary, LatestProblem, UnifiedTask } from "@/shared/types";
+import {
+  PROJECT_DETAIL_ISSUES_FETCH_CONCURRENCY as ISSUES_FETCH_CONCURRENCY,
+  PROJECT_DETAIL_ISSUES_MAX_TASKS as ISSUES_MAX_TASKS,
+  PROJECT_DETAIL_REQUEST_TIMEOUT_MS as REQUEST_TIMEOUT_MS
+} from "@/shared/constants";
+import { ProjectIssuesTab } from "@/pages/project-detail/components/ProjectIssuesTab";
+import { ProjectTasksTab } from "@/pages/project-detail/components/ProjectTasksTab";
+import { ProjectStatsCards, type ProjectCombinedStats } from "@/pages/project-detail/components/ProjectStatsCards";
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -66,27 +72,10 @@ export default function ProjectDetail() {
     programming_languages: []
   });
   const [activeTab, setActiveTab] = useState("overview");
-  type AggregatedAuditIssue = AuditIssue & {
-    task_created_at?: string;
-    task_completed_at?: string;
-  };
-
   const [latestIssues, setLatestIssues] = useState<AggregatedAuditIssue[]>([]);
-  type AggregatedAgentFinding = AgentFinding & {
-    task_created_at?: string;
-    task_completed_at?: string | null;
-  };
-
   const [latestFindings, setLatestFindings] = useState<AggregatedAgentFinding[]>([]);
   const [loadingIssues, setLoadingIssues] = useState(false);
-  const [issuesSummary, setIssuesSummary] = useState<{
-    completedAuditTasksCount: number;
-    completedAgentTasksCount: number;
-    fetchedAuditTasksCount: number;
-    fetchedAgentTasksCount: number;
-    isLimited: boolean;
-    maxTasks: number;
-  }>({
+  const [issuesSummary, setIssuesSummary] = useState<IssuesSummary>({
     completedAuditTasksCount: 0,
     completedAgentTasksCount: 0,
     fetchedAuditTasksCount: 0,
@@ -99,9 +88,6 @@ export default function ProjectDetail() {
   const [showAuditOptionsDialog, setShowAuditOptionsDialog] = useState(false);
 
   // ============ Helpers ============
-  const REQUEST_TIMEOUT_MS = 12_000;
-  const ISSUES_MAX_TASKS = 20;
-  const ISSUES_FETCH_CONCURRENCY = 5;
 
   async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
     let timeoutId: number | undefined;
@@ -184,8 +170,8 @@ export default function ProjectDetail() {
       return;
     }
 
-    setLoadingIssues(true);
-    try {
+      setLoadingIssues(true);
+      try {
       const [issuesResults, findingsResults] = await Promise.all([
         mapWithConcurrency(limitedAuditTasks, ISSUES_FETCH_CONCURRENCY, async (task: AuditTask) => {
           const issues = await fetchAuditIssues(task.id);
@@ -244,27 +230,12 @@ export default function ProjectDetail() {
         return taskCreatedAtB - taskCreatedAtA;
       });
       setLatestFindings(flatFindings);
-    } catch (error) {
-      console.error('Failed to load issues:', error);
-      toast.error("加载问题列表失败");
-    } finally {
-      setLoadingIssues(false);
-    }
-  };
-
-  type LatestProblem = {
-    kind: 'audit' | 'agent';
-    id: string;
-    task_id: string;
-    task_created_at?: string;
-    created_at: string;
-    severity: 'critical' | 'high' | 'medium' | 'low';
-    title: string;
-    description?: string | null;
-    file_path?: string | null;
-    line_number?: number | null;
-    line_end?: number | null;
-    category?: string | null;
+      } catch (error) {
+        console.error('Failed to load issues:', error);
+        toast.error("加载问题列表失败");
+      } finally {
+        setLoadingIssues(false);
+      }
   };
 
   const latestProblems: LatestProblem[] = useMemo(() => {
@@ -450,10 +421,6 @@ export default function ProjectDetail() {
     }
   };
 
-  type UnifiedTask =
-    | { kind: 'audit'; task: AuditTask }
-    | { kind: 'agent'; task: AgentTask };
-
   const unifiedTasks: UnifiedTask[] = useMemo(() => {
     const merged: UnifiedTask[] = [
       ...auditTasks.map((t) => ({ kind: 'audit' as const, task: t })),
@@ -463,7 +430,7 @@ export default function ProjectDetail() {
     return merged;
   }, [auditTasks, agentTasks]);
 
-  const combinedStats = useMemo(() => {
+  const combinedStats: ProjectCombinedStats = useMemo(() => {
     const totalTasks = auditTasks.length + agentTasks.length;
     const completedTasks =
       auditTasks.filter((t) => t.status === 'completed').length +
@@ -706,55 +673,7 @@ export default function ProjectDetail() {
       </div>
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 relative z-10">
-        <div className="cyber-card p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="stat-label">审计任务</p>
-              <p className="stat-value">{combinedStats.totalTasks}</p>
-            </div>
-            <div className="stat-icon text-sky-400">
-              <Activity className="w-6 h-6" />
-            </div>
-          </div>
-        </div>
-
-        <div className="cyber-card p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="stat-label">已完成</p>
-              <p className="stat-value">{combinedStats.completedTasks}</p>
-            </div>
-            <div className="stat-icon text-emerald-400">
-              <CheckCircle className="w-6 h-6" />
-            </div>
-          </div>
-        </div>
-
-        <div className="cyber-card p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="stat-label">发现问题</p>
-              <p className="stat-value">{combinedStats.totalIssues}</p>
-            </div>
-            <div className="stat-icon text-amber-400">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-          </div>
-        </div>
-
-        <div className="cyber-card p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="stat-label">平均质量分</p>
-              <p className="stat-value">{combinedStats.avgQualityScore.toFixed(1)}</p>
-            </div>
-            <div className="stat-icon text-violet-400">
-              <Code className="w-6 h-6" />
-            </div>
-          </div>
-        </div>
-      </div>
+      <ProjectStatsCards stats={combinedStats} />
 
       {/* 主要内容 */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full relative z-10">
@@ -894,197 +813,23 @@ export default function ProjectDetail() {
         </TabsContent>
 
         <TabsContent value="tasks" className="flex flex-col gap-6 mt-6">
-          <div className="flex items-center justify-between">
-            <div className="section-header mb-0 pb-0 border-0">
-              <FileText className="w-5 h-5 text-primary" />
-              <h3 className="section-title">审计任务列表</h3>
-            </div>
-            <Button onClick={handleCreateTask} className="cyber-btn-primary">
-              <Play className="w-4 h-4 mr-2" />
-              新建任务
-            </Button>
-          </div>
-
-          {unifiedTasks.length > 0 ? (
-            <div className="space-y-4">
-              {unifiedTasks.map((t) => {
-                const isAudit = t.kind === 'audit';
-                const task = t.task as any;
-                const issuesOrFindings = isAudit ? (task.issues_count ?? 0) : (task.findings_count ?? 0);
-                const totalFiles = task.total_files ?? 0;
-                const totalLines = task.total_lines ?? '-';
-                const qualityScore = typeof task.quality_score === 'number' ? task.quality_score : 0;
-
-                return (
-                <div key={`${t.kind}:${task.id}`} className="cyber-card p-6">
-                  <div className="flex items-center justify-between mb-4 pb-4 border-b border-border">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${task.status === 'completed' ? 'bg-emerald-500/20' :
-                        task.status === 'running' ? 'bg-sky-500/20' :
-                          task.status === 'failed' ? 'bg-rose-500/20' :
-                            'bg-muted'
-                        }`}>
-                        {getStatusIcon(task.status)}
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-foreground uppercase">
-                          {isAudit
-                            ? (task.task_type === 'repository' ? '审计任务' : '即时分析任务')
-                            : 'Agent 审计任务'}
-                        </h4>
-                        <p className="text-sm text-muted-foreground font-mono">
-                          创建于 {formatDate(task.created_at)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge className={t.kind === 'agent' ? 'cyber-badge-info' : 'cyber-badge-muted'}>
-                        {t.kind === 'agent' ? 'AGENT' : 'AUDIT'}
-                      </Badge>
-                      {getStatusBadge(task.status)}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 font-mono">
-                    <div className="text-center p-3 bg-muted rounded-lg border border-border">
-                      <p className="text-2xl font-bold text-foreground">{totalFiles}</p>
-                      <p className="text-xs text-muted-foreground uppercase">总文件数</p>
-                    </div>
-                    <div className="text-center p-3 bg-muted rounded-lg border border-border">
-                      <p className="text-2xl font-bold text-foreground">{totalLines}</p>
-                      <p className="text-xs text-muted-foreground uppercase">代码行数</p>
-                    </div>
-                    <div className="text-center p-3 bg-muted rounded-lg border border-border">
-                      <p className="text-2xl font-bold text-amber-400">{issuesOrFindings}</p>
-                      <p className="text-xs text-muted-foreground uppercase">{isAudit ? '发现问题' : '发现漏洞'}</p>
-                    </div>
-                    <div className="text-center p-3 bg-muted rounded-lg border border-border">
-                      <p className="text-2xl font-bold text-primary">{qualityScore.toFixed(1)}</p>
-                      <p className="text-xs text-muted-foreground uppercase">质量评分</p>
-                    </div>
-                  </div>
-
-                  {task.status === 'completed' && typeof qualityScore === 'number' && (
-                    <div className="space-y-2 mb-4">
-                      <div className="flex items-center justify-between text-sm font-mono">
-                        <span className="text-muted-foreground">质量评分</span>
-                        <span className="text-foreground font-bold">{qualityScore.toFixed(1)}/100</span>
-                      </div>
-                      <Progress value={qualityScore} className="h-2 bg-muted [&>div]:bg-primary" />
-                    </div>
-                  )}
-
-                  <div className="flex justify-end space-x-2 pt-4 border-t border-border">
-                    <Link to={isAudit ? `/tasks/${task.id}` : `/agent-audit/${task.id}`}>
-                      <Button variant="outline" size="sm" className="cyber-btn-outline">
-                        <FileText className="w-4 h-4 mr-2" />
-                        查看详情
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              )})}
-            </div>
-          ) : (
-            <div className="cyber-card p-12 text-center">
-              <Activity className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-foreground mb-2 uppercase">暂无审计任务</h3>
-              <p className="text-sm text-muted-foreground mb-6 font-mono">创建第一个审计任务开始代码质量分析</p>
-              <Button onClick={handleCreateTask} className="cyber-btn-primary">
-                <Play className="w-4 h-4 mr-2" />
-                创建任务
-              </Button>
-            </div>
-          )}
+          <ProjectTasksTab
+            unifiedTasks={unifiedTasks}
+            onCreateTask={handleCreateTask}
+            formatDate={formatDate}
+            renderStatusBadge={getStatusBadge}
+            renderStatusIcon={getStatusIcon}
+          />
         </TabsContent>
 
         <TabsContent value="issues" className="flex flex-col gap-6 mt-6">
-          <div className="flex items-center justify-between">
-            <div className="section-header mb-0 pb-0 border-0">
-              <AlertTriangle className="w-5 h-5 text-amber-400" />
-              <h3 className="section-title">最新发现的问题</h3>
-            </div>
-            {(auditTasks.length > 0 || agentTasks.length > 0) && (
-              <p className="text-sm text-muted-foreground font-mono">
-                已完成审计任务：{issuesSummary.completedAuditTasksCount} 次 / Agent审计：{issuesSummary.completedAgentTasksCount} 次
-                {issuesSummary.isLimited ? `（各仅展示最近 ${issuesSummary.maxTasks} 次）` : ''}
-                ，共 {latestProblems.length} 条问题/漏洞
-              </p>
-            )}
-          </div>
-
-          {loadingIssues ? (
-            <div className="text-center py-12">
-              <div className="loading-spinner mx-auto mb-4"></div>
-              <p className="text-muted-foreground font-mono">正在加载问题列表...</p>
-            </div>
-          ) : latestProblems.length > 0 ? (
-            <div className="space-y-4">
-              {latestProblems.map((issue, index) => (
-                <div key={index} className="cyber-card p-4 hover:border-border transition-all">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start space-x-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${issue.severity === 'critical' ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400' :
-                        issue.severity === 'high' ? 'bg-orange-500/20 text-orange-600 dark:text-orange-400' :
-                          issue.severity === 'medium' ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' :
-                            'bg-sky-500/20 text-sky-600 dark:text-sky-400'
-                        }`}>
-                        <AlertTriangle className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-base text-foreground mb-1 uppercase">{issue.title}</h4>
-                        <div className="flex items-center space-x-2 text-xs text-muted-foreground font-mono">
-                          <span className="bg-muted px-2 py-0.5 rounded border border-border">
-                            {issue.file_path || '未知文件'}
-                            {issue.line_number != null
-                              ? (issue.line_end != null && issue.line_end !== issue.line_number
-                                ? `:${issue.line_number}-${issue.line_end}`
-                                : `:${issue.line_number}`)
-                              : ''
-                            }
-                          </span>
-                          <span>{issue.category || '-'}</span>
-                          {issue.task_created_at && (
-                            <span className="bg-muted px-2 py-0.5 rounded border border-border">
-                              {issue.kind === 'agent' ? 'Agent' : 'Audit'} {issue.task_id?.slice(0, 8)} · {formatDate(issue.task_created_at)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Link to={issue.kind === 'agent' ? `/agent-audit/${issue.task_id}` : `/tasks/${issue.task_id}`}>
-                        <Button variant="outline" size="sm" className="cyber-btn-outline">
-                          <FileText className="w-4 h-4 mr-2" />
-                          查看任务
-                        </Button>
-                      </Link>
-                      <Badge className={`
-                        ${issue.severity === 'critical' ? 'severity-critical' :
-                          issue.severity === 'high' ? 'severity-high' :
-                            issue.severity === 'medium' ? 'severity-medium' :
-                              'severity-low'}
-                        font-bold uppercase px-2 py-1 rounded text-xs
-                      `}>
-                        {issue.severity === 'critical' ? '严重' :
-                          issue.severity === 'high' ? '高' :
-                            issue.severity === 'medium' ? '中等' : '低'}
-                      </Badge>
-                    </div>
-                  </div>
-                  <p className="mt-3 text-sm text-muted-foreground font-mono border-t border-border pt-3">
-                    {issue.description || '-'}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="cyber-card p-12 text-center">
-              <CheckCircle className="w-16 h-16 text-emerald-600 dark:text-emerald-500 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-foreground mb-2 uppercase">未发现问题</h3>
-              <p className="text-sm text-muted-foreground font-mono">最近一次审计/Agent审计未发现明显问题，或尚未进行审计。</p>
-            </div>
-          )}
+          <ProjectIssuesTab
+            hasAnyTasks={auditTasks.length > 0 || agentTasks.length > 0}
+            issuesSummary={issuesSummary}
+            loading={loadingIssues}
+            latestProblems={latestProblems}
+            formatDate={formatDate}
+          />
         </TabsContent>
 
         <TabsContent value="settings" className="flex flex-col gap-6 mt-6">
