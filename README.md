@@ -266,7 +266,7 @@ docker compose up -d
 ### 1. 手动启动数据库
 
 ```bash
-docker compose up -d redis db
+docker compose up -d redis db adminer
 ```
 
 ### 2. 后端启动

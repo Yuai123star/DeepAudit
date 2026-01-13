@@ -1,0 +1,20 @@
+# =============================================
+# DeepAudit v3.0.2 Docker Compose 开发者补充配置
+# =============================================
+# 部署: docker compose up -d
+# 注意: 仅用于开发者调试，生产环境请勿使用
+
+services:
+  # =============================================
+  # 开发者调试服务
+  # =============================================
+  adminer:
+    image: adminer:latest
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - deepaudit-network
