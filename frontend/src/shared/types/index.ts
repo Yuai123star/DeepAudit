@@ -111,6 +111,45 @@ export interface InstantAnalysis {
   user?: Profile;
 }
 
+// ProjectDetail 页面：前端聚合层类型（用于把 AuditTask / AgentTask 的结果统一展示）
+export type AggregatedAuditIssue = AuditIssue & {
+  task_created_at?: string;
+  task_completed_at?: string | null;
+};
+
+export type AggregatedAgentFinding = import("@/shared/api/agentTasks").AgentFinding & {
+  task_created_at?: string;
+  task_completed_at?: string | null;
+};
+
+export type IssuesSummary = {
+  completedAuditTasksCount: number;
+  completedAgentTasksCount: number;
+  fetchedAuditTasksCount: number;
+  fetchedAgentTasksCount: number;
+  isLimited: boolean;
+  maxTasks: number;
+};
+
+export type LatestProblem = {
+  kind: "audit" | "agent";
+  id: string;
+  task_id: string;
+  task_created_at?: string;
+  created_at: string;
+  severity: "critical" | "high" | "medium" | "low";
+  title: string;
+  description?: string | null;
+  file_path?: string | null;
+  line_number?: number | null;
+  line_end?: number | null;
+  category?: string | null;
+};
+
+export type UnifiedTask =
+  | { kind: "audit"; task: AuditTask }
+  | { kind: "agent"; task: import("@/shared/api/agentTasks").AgentTask };
+
 // 表单相关类型
 export interface CreateProjectForm {
   name: string;

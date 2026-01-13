@@ -77,6 +77,14 @@ export const DEFAULT_CONFIG = {
   DEBOUNCE_DELAY: 300, // 300ms
 } as const;
 
+// ProjectDetail 页面专用常量
+// 单请求超时（ms）：避免外部/后端卡死导致 UI 长时间无响应
+export const PROJECT_DETAIL_REQUEST_TIMEOUT_MS = 12_000;
+// Issues/Findings 面板：最多抓取最近 N 个已完成任务
+export const PROJECT_DETAIL_ISSUES_MAX_TASKS = 20;
+// Issues/Findings 拉取并发度：防止对后端形成突发压力
+export const PROJECT_DETAIL_ISSUES_FETCH_CONCURRENCY = 5;
+
 // API 端点
 export const API_ENDPOINTS = {
   PROJECTS: '/api/projects',
