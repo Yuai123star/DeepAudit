@@ -21,6 +21,8 @@ build/
 # IDE and editor files
 .vscode/
 .idea/
+.zencoder/
+.zenflow/
 *.swp
 *.swo
 *~
