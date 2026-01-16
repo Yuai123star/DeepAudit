@@ -94,9 +94,6 @@
 
 </div>
 
-<details>
-<summary><b>点击展开完整 CVE 列表</b></summary>
-
 | CVE 编号 | 项目 | 项目热度 | 漏洞类型 | CVSS |
 |:---|:---|:---:|:---|:---:|
 | [CVE-2025-13789](https://nvd.nist.gov/vuln/detail/CVE-2025-13789) | Zentao PMS | [![Stars](https://img.shields.io/github/stars/easysoft/zentaopms?style=social)](https://github.com/easysoft/zentaopms/stargazers) | SSRF | 5.3 |
@@ -147,8 +144,6 @@
 | [CVE-2025-8764](https://nvd.nist.gov/vuln/detail/CVE-2025-8764) | Litemall | [![Stars](https://img.shields.io/github/stars/linlinjava/litemall?style=social)](https://github.com/linlinjava/litemall/stargazers) | XSS | 5.4 |
 | [CVE-2025-8753](https://nvd.nist.gov/vuln/detail/CVE-2025-8753) | Litemall | [![Stars](https://img.shields.io/github/stars/linlinjava/litemall?style=social)](https://github.com/linlinjava/litemall/stargazers) | Arbitrary File Deletion | 5.4 |
 | [CVE-2025-8708](https://nvd.nist.gov/vuln/detail/CVE-2025-8708) | White-Jotter | [![Stars](https://img.shields.io/github/stars/Antabot/White-Jotter?style=social)](https://github.com/Antabot/White-Jotter/stargazers) | Deserialization | 7.5 |
-
-</details>
 
 👉 [查看完整 CVE 列表详情](CVEList.md)
 
