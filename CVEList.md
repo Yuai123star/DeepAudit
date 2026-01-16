@@ -20,6 +20,24 @@
 | Newbee-mall  | Guessable Captcha | CVE-2025-10423 | ez-lbz |
 | Newbee-mall  | Privilege Escalation | CVE-2025-10422 | ez-lbz |
 | Mall | Privilege Escalation | CVE-2025-9835  | ez-lbz |
+| O2oa | XSS | CVE-2025-9737  | ez-lbz |
+| O2oa | XSS | CVE-2025-9736  | ez-lbz |
+| O2oa | XSS | CVE-2025-9735  | ez-lbz |
+| O2oa | XSS | CVE-2025-9734  | ez-lbz |
+| O2oa | XSS | CVE-2025-9719  | ez-lbz |
+| O2oa | XSS | CVE-2025-9718  | ez-lbz |
+| O2oa | XSS | CVE-2025-9717  | ez-lbz |
+| O2oa | XSS | CVE-2025-9716  | ez-lbz |
+| O2oa | XSS | CVE-2025-9715  | ez-lbz |
+| O2oa | XSS | CVE-2025-9683  | ez-lbz |
+| O2oa | XSS | CVE-2025-9682  | ez-lbz |
+| O2oa | XSS | CVE-2025-9681  | ez-lbz |
+| O2oa | XSS | CVE-2025-9680  | ez-lbz |
+| O2oa | XSS | CVE-2025-9659  | ez-lbz |
+| O2oa | XSS | CVE-2025-9658  | ez-lbz |
+| O2oa | XSS | CVE-2025-9657  | ez-lbz |
+| O2oa | XSS | CVE-2025-9655  | ez-lbz |
+| O2oa | XSS | CVE-2025-9646  | ez-lbz |
 
 ---
 
