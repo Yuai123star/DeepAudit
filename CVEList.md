@@ -7,6 +7,16 @@
 | Zentao PMS | SSRF | CVE-2025-13789 | ez-lbz |
 | Zentao PMS | Privilege Escalation | CVE-2025-13787 | ez-lbz |
 | Dataease | JNDI Injection | CVE-2025-64428 | ez-lbz |
+| Mudulithshop | SQL Injection | CVE-2025-13246 | ez-lbz |
+| Dataease | SSRF | CVE-2025-64163 | ez-lbz |
+| Dataease | JNDI Injection | CVE-2025-64164 | ez-lbz |
+| PowerJob | Privilege Escalation | CVE-2025-11581 | ez-lbz |
+| PowerJob | Privilege Escalation | CVE-2025-11580 | ez-lbz |
+| Jimureport | Deserialization | CVE-2025-10771 | ez-lbz |
+| Jimureport | Deserialization | CVE-2025-10770 | ez-lbz |
+| h2o-3 | Deserialization | CVE-2025-10769 | ez-lbz |
+| h2o-3 | Deserialization | CVE-2025-10768 | ez-lbz |
+| Dataease | JNDI Injection | CVE-2025-58045 | ez-lbz |
 
 ---
 
