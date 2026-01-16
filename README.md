@@ -86,6 +86,76 @@
 
 ---
 
+## 🏆 CVE 漏洞发现
+
+<div align="center">
+
+**DeepAudit 已成功发现并获得 48 个 CVE 编号，涉及 16 个知名开源项目**
+
+</div>
+
+<details>
+<summary><b>点击展开完整 CVE 列表</b></summary>
+
+| CVE 编号 | 项目 | 漏洞类型 | CVSS |
+|:---|:---|:---|:---:|
+| [CVE-2025-13789](https://nvd.nist.gov/vuln/detail/CVE-2025-13789) | Zentao PMS | SSRF | 5.3 |
+| [CVE-2025-13787](https://nvd.nist.gov/vuln/detail/CVE-2025-13787) | Zentao PMS | Privilege Escalation | 9.1 |
+| [CVE-2025-64428](https://nvd.nist.gov/vuln/detail/CVE-2025-64428) | Dataease | JNDI Injection | 9.8 |
+| [CVE-2025-13246](https://nvd.nist.gov/vuln/detail/CVE-2025-13246) | Modulithshop | SQL Injection | 6.3 |
+| [CVE-2025-64163](https://nvd.nist.gov/vuln/detail/CVE-2025-64163) | Dataease | SSRF | 9.8 |
+| [CVE-2025-64164](https://nvd.nist.gov/vuln/detail/CVE-2025-64164) | Dataease | JNDI Injection | 9.8 |
+| [CVE-2025-11581](https://nvd.nist.gov/vuln/detail/CVE-2025-11581) | PowerJob | Privilege Escalation | 7.5 |
+| [CVE-2025-11580](https://nvd.nist.gov/vuln/detail/CVE-2025-11580) | PowerJob | Privilege Escalation | 5.3 |
+| [CVE-2025-10771](https://nvd.nist.gov/vuln/detail/CVE-2025-10771) | Jimureport | Deserialization | 9.8 |
+| [CVE-2025-10770](https://nvd.nist.gov/vuln/detail/CVE-2025-10770) | Jimureport | Deserialization | 6.5 |
+| [CVE-2025-10769](https://nvd.nist.gov/vuln/detail/CVE-2025-10769) | H2o-3 | Deserialization | 9.8 |
+| [CVE-2025-10768](https://nvd.nist.gov/vuln/detail/CVE-2025-10768) | H2o-3 | Deserialization | 9.8 |
+| [CVE-2025-58045](https://nvd.nist.gov/vuln/detail/CVE-2025-58045) | Dataease | JNDI Injection | 9.8 |
+| [CVE-2025-10423](https://nvd.nist.gov/vuln/detail/CVE-2025-10423) | Newbee-mall | Guessable Captcha | 3.7 |
+| [CVE-2025-10422](https://nvd.nist.gov/vuln/detail/CVE-2025-10422) | Newbee-mall | Privilege Escalation | 4.3 |
+| [CVE-2025-9835](https://nvd.nist.gov/vuln/detail/CVE-2025-9835) | Mall | Privilege Escalation | 4.3 |
+| [CVE-2025-9737](https://nvd.nist.gov/vuln/detail/CVE-2025-9737) | O2oa | XSS | 5.4 |
+| [CVE-2025-9736](https://nvd.nist.gov/vuln/detail/CVE-2025-9736) | O2oa | XSS | 5.4 |
+| [CVE-2025-9735](https://nvd.nist.gov/vuln/detail/CVE-2025-9735) | O2oa | XSS | 5.4 |
+| [CVE-2025-9734](https://nvd.nist.gov/vuln/detail/CVE-2025-9734) | O2oa | XSS | 5.4 |
+| [CVE-2025-9719](https://nvd.nist.gov/vuln/detail/CVE-2025-9719) | O2oa | XSS | 5.4 |
+| [CVE-2025-9718](https://nvd.nist.gov/vuln/detail/CVE-2025-9718) | O2oa | XSS | 5.4 |
+| [CVE-2025-9717](https://nvd.nist.gov/vuln/detail/CVE-2025-9717) | O2oa | XSS | 5.4 |
+| [CVE-2025-9716](https://nvd.nist.gov/vuln/detail/CVE-2025-9716) | O2oa | XSS | 5.4 |
+| [CVE-2025-9715](https://nvd.nist.gov/vuln/detail/CVE-2025-9715) | O2oa | XSS | 5.4 |
+| [CVE-2025-9683](https://nvd.nist.gov/vuln/detail/CVE-2025-9683) | O2oa | XSS | 5.4 |
+| [CVE-2025-9682](https://nvd.nist.gov/vuln/detail/CVE-2025-9682) | O2oa | XSS | 5.4 |
+| [CVE-2025-9681](https://nvd.nist.gov/vuln/detail/CVE-2025-9681) | O2oa | XSS | 5.4 |
+| [CVE-2025-9680](https://nvd.nist.gov/vuln/detail/CVE-2025-9680) | O2oa | XSS | 5.4 |
+| [CVE-2025-9659](https://nvd.nist.gov/vuln/detail/CVE-2025-9659) | O2oa | XSS | 5.4 |
+| [CVE-2025-9658](https://nvd.nist.gov/vuln/detail/CVE-2025-9658) | O2oa | XSS | 5.4 |
+| [CVE-2025-9657](https://nvd.nist.gov/vuln/detail/CVE-2025-9657) | O2oa | XSS | 5.4 |
+| [CVE-2025-9655](https://nvd.nist.gov/vuln/detail/CVE-2025-9655) | O2oa | XSS | 5.4 |
+| [CVE-2025-9646](https://nvd.nist.gov/vuln/detail/CVE-2025-9646) | O2oa | XSS | 5.4 |
+| [CVE-2025-9602](https://nvd.nist.gov/vuln/detail/CVE-2025-9602) | RockOA | Database Backdoor | 6.5 |
+| [CVE-2025-9514](https://nvd.nist.gov/vuln/detail/CVE-2025-9514) | Mall | Privilege Escalation | 3.7 |
+| [CVE-2025-9264](https://nvd.nist.gov/vuln/detail/CVE-2025-9264) | Xxl-job | Privilege Escalation | 5.4 |
+| [CVE-2025-9263](https://nvd.nist.gov/vuln/detail/CVE-2025-9263) | Xxl-job | Privilege Escalation | 4.3 |
+| [CVE-2025-9241](https://nvd.nist.gov/vuln/detail/CVE-2025-9241) | Eladmin | CSV/XLSX Injection | 7.5 |
+| [CVE-2025-9240](https://nvd.nist.gov/vuln/detail/CVE-2025-9240) | Eladmin | Sensitive Information Disclosure | 4.3 |
+| [CVE-2025-9239](https://nvd.nist.gov/vuln/detail/CVE-2025-9239) | Eladmin | Hardcoded Credentials | 3.7 |
+| [CVE-2025-8974](https://nvd.nist.gov/vuln/detail/CVE-2025-8974) | Litemall | Hardcoded Credentials | 9.8 |
+| [CVE-2025-8852](https://nvd.nist.gov/vuln/detail/CVE-2025-8852) | Wukong CRM | Sensitive Information Disclosure | 4.3 |
+| [CVE-2025-8840](https://nvd.nist.gov/vuln/detail/CVE-2025-8840) | Jsherp | Privilege Escalation | 5.4 |
+| [CVE-2025-8839](https://nvd.nist.gov/vuln/detail/CVE-2025-8839) | Jsherp | Privilege Escalation | 8.8 |
+| [CVE-2025-8764](https://nvd.nist.gov/vuln/detail/CVE-2025-8764) | Litemall | XSS | 5.4 |
+| [CVE-2025-8753](https://nvd.nist.gov/vuln/detail/CVE-2025-8753) | Litemall | Arbitrary File Deletion | 5.4 |
+| [CVE-2025-8708](https://nvd.nist.gov/vuln/detail/CVE-2025-8708) | White-Jotter | Deserialization | 7.5 |
+
+</details>
+
+👉 [查看完整 CVE 列表详情](CVEList.md)
+
+> *以上漏洞由团队成员 [@ez-lbz](https://github.com/ez-lbz) 使用 DeepAudit 挖掘发现*
+
+---
+
 ## ⚡ 项目概述
 
 **DeepAudit** 是一个基于 **Multi-Agent 协作架构**的下一代代码安全审计平台。它不仅仅是一个静态扫描工具，而是模拟安全专家的思维模式，通过多个智能体（**Orchestrator**, **Recon**, **Analysis**, **Verification**）的自主协作，实现对代码的深度理解、漏洞挖掘和 **自动化沙箱 PoC 验证**。
