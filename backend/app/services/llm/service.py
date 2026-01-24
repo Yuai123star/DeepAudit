@@ -23,16 +23,33 @@ logger = logging.getLogger(__name__)
 
 class LLMService:
     """LLM服务类"""
-    
+
     def __init__(self, user_config: Optional[Dict[str, Any]] = None):
         """
         初始化LLM服务
-        
+
         Args:
             user_config: 用户配置字典，包含llmConfig字段
         """
         self._config: Optional[LLMConfig] = None
         self._user_config = user_config or {}
+
+    def get_agent_timeout_config(self) -> Dict[str, int]:
+        """
+        获取Agent超时配置（秒）
+
+        Returns:
+            包含各种超时配置的字典
+        """
+        user_llm_config = self._user_config.get('llmConfig', {})
+
+        return {
+            'llm_first_token_timeout': user_llm_config.get('llmFirstTokenTimeout') or getattr(settings, 'LLM_FIRST_TOKEN_TIMEOUT', 30),
+            'llm_stream_timeout': user_llm_config.get('llmStreamTimeout') or getattr(settings, 'LLM_STREAM_TIMEOUT', 60),
+            'agent_timeout': user_llm_config.get('agentTimeout') or getattr(settings, 'AGENT_TIMEOUT_SECONDS', 1800),
+            'sub_agent_timeout': user_llm_config.get('subAgentTimeout') or getattr(settings, 'SUB_AGENT_TIMEOUT_SECONDS', 600),
+            'tool_timeout': user_llm_config.get('toolTimeout') or getattr(settings, 'TOOL_TIMEOUT_SECONDS', 60),
+        }
     
     @property
     def config(self) -> LLMConfig:

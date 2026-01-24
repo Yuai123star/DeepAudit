@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     LLM_TIMEOUT: int = 150  # 超时时间（秒）
     LLM_TEMPERATURE: float = 0.1
     LLM_MAX_TOKENS: int = 4096
+
+    # Agent 流式超时配置（秒）
+    LLM_FIRST_TOKEN_TIMEOUT: int = 30  # 等待首个Token的超时时间
+    LLM_STREAM_TIMEOUT: int = 60  # 流式输出中两个Token之间的超时时间
+    SUB_AGENT_TIMEOUT_SECONDS: int = 600  # 子Agent超时时间（10分钟）
+    TOOL_TIMEOUT_SECONDS: int = 60  # 工具执行默认超时时间
     
     # 各LLM提供商的API Key配置（兼容单独配置）
     OPENAI_API_KEY: Optional[str] = None

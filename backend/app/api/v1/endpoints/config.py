@@ -55,7 +55,14 @@ class LLMConfigSchema(BaseModel):
     llmTemperature: Optional[float] = None
     llmMaxTokens: Optional[int] = None
     llmCustomHeaders: Optional[str] = None
-    
+
+    # Agent超时配置
+    llmFirstTokenTimeout: Optional[int] = None  # 首Token超时（秒）
+    llmStreamTimeout: Optional[int] = None  # 流式超时（秒）
+    agentTimeout: Optional[int] = None  # Agent总超时（秒）
+    subAgentTimeout: Optional[int] = None  # 子Agent超时（秒）
+    toolTimeout: Optional[int] = None  # 工具执行超时（秒）
+
     # 平台专用配置
     geminiApiKey: Optional[str] = None
     openaiApiKey: Optional[str] = None
@@ -111,6 +118,13 @@ def get_default_config() -> dict:
             "llmTemperature": settings.LLM_TEMPERATURE,
             "llmMaxTokens": settings.LLM_MAX_TOKENS,
             "llmCustomHeaders": "",
+            # Agent超时配置（秒）
+            "llmFirstTokenTimeout": getattr(settings, 'LLM_FIRST_TOKEN_TIMEOUT', 30),
+            "llmStreamTimeout": getattr(settings, 'LLM_STREAM_TIMEOUT', 60),
+            "agentTimeout": settings.AGENT_TIMEOUT_SECONDS,
+            "subAgentTimeout": getattr(settings, 'SUB_AGENT_TIMEOUT_SECONDS', 600),
+            "toolTimeout": getattr(settings, 'TOOL_TIMEOUT_SECONDS', 60),
+            # 平台专用配置
             "geminiApiKey": settings.GEMINI_API_KEY or "",
             "openaiApiKey": settings.OPENAI_API_KEY or "",
             "claudeApiKey": settings.CLAUDE_API_KEY or "",

@@ -297,6 +297,9 @@ class BaseAgent(ABC):
         self._total_tokens = 0
         self._tool_calls = 0
         self._cancelled = False
+
+        # 获取超时配置
+        self._timeout_config = self._get_timeout_config()
         
         # 🔥 协作状态
         self._incoming_handoff: Optional[TaskHandoff] = None
@@ -347,19 +350,43 @@ class BaseAgent(ABC):
         """加载知识模块到系统提示词"""
         if not self.knowledge_modules:
             return
-        
+
         try:
             from ..knowledge import knowledge_loader
-            
+
             enhanced_prompt = knowledge_loader.build_system_prompt_with_modules(
                 self.config.system_prompt or "",
                 self.knowledge_modules,
             )
             self.config.system_prompt = enhanced_prompt
-            
+
             logger.info(f"[{self.name}] Loaded knowledge modules: {self.knowledge_modules}")
         except Exception as e:
             logger.warning(f"Failed to load knowledge modules: {e}")
+
+    def _get_timeout_config(self) -> Dict[str, int]:
+        """
+        获取超时配置（秒）
+
+        优先级：用户配置 > 环境变量默认值
+
+        Returns:
+            包含各种超时配置的字典
+        """
+        from app.core.config import settings
+
+        # 尝试从 llm_service 获取用户配置的超时值
+        if hasattr(self.llm_service, 'get_agent_timeout_config'):
+            return self.llm_service.get_agent_timeout_config()
+
+        # 回退到环境变量默认值
+        return {
+            'llm_first_token_timeout': getattr(settings, 'LLM_FIRST_TOKEN_TIMEOUT', 30),
+            'llm_stream_timeout': getattr(settings, 'LLM_STREAM_TIMEOUT', 60),
+            'agent_timeout': getattr(settings, 'AGENT_TIMEOUT_SECONDS', 1800),
+            'sub_agent_timeout': getattr(settings, 'SUB_AGENT_TIMEOUT_SECONDS', 600),
+            'tool_timeout': getattr(settings, 'TOOL_TIMEOUT_SECONDS', 60),
+        }
     
     @property
     def name(self) -> str:
@@ -983,10 +1010,12 @@ class BaseAgent(ABC):
                     break
                 
                 try:
-                    # 🔥 第一個 token 30秒超时，后续 token 60秒超时
-                    # 这是一个应用层的安全网，防止底层 LLM 客户端挂死
-                    timeout = 30.0 if not first_token_received else 60.0
-                    
+                    # 🔥 使用用户配置的超时时间
+                    # 第一个 token 使用首Token超时，后续 token 使用流式超时
+                    first_token_timeout = float(self._timeout_config.get('llm_first_token_timeout', 30))
+                    stream_timeout = float(self._timeout_config.get('llm_stream_timeout', 60))
+                    timeout = first_token_timeout if not first_token_received else stream_timeout
+
                     chunk = await asyncio.wait_for(iterator.__anext__(), timeout=timeout)
 
                     last_activity = time.time()
@@ -1110,7 +1139,9 @@ class BaseAgent(ABC):
                 "sql_injection_test": 30,
                 "xss_test": 30,
             }
-            timeout = tool_timeouts.get(tool_name, 30)  # 默认30秒
+            # 🔥 使用用户配置的默认工具超时时间
+            default_tool_timeout = self._timeout_config.get('tool_timeout', 60)
+            timeout = tool_timeouts.get(tool_name, default_tool_timeout)
 
             # 🔥 使用 asyncio.wait_for 添加超时控制，同时支持取消
             async def execute_with_cancel_check():

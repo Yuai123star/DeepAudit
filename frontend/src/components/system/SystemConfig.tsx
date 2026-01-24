@@ -44,6 +44,9 @@ const DEFAULT_MODELS: Record<string, string> = {
 interface SystemConfigData {
   llmProvider: string; llmApiKey: string; llmModel: string; llmBaseUrl: string;
   llmTimeout: number; llmTemperature: number; llmMaxTokens: number;
+  // Agent超时配置
+  llmFirstTokenTimeout: number; llmStreamTimeout: number;
+  agentTimeout: number; subAgentTimeout: number; toolTimeout: number;
   githubToken: string; gitlabToken: string; giteaToken: string;
   maxAnalyzeFiles: number; llmConcurrency: number; llmGapMs: number; outputLanguage: string;
 }
@@ -89,6 +92,12 @@ export function SystemConfig() {
           llmTimeout: llmConfig.llmTimeout || 150000,
           llmTemperature: llmConfig.llmTemperature ?? 0.1,
           llmMaxTokens: llmConfig.llmMaxTokens || 4096,
+          // Agent超时配置
+          llmFirstTokenTimeout: llmConfig.llmFirstTokenTimeout || 30,
+          llmStreamTimeout: llmConfig.llmStreamTimeout || 60,
+          agentTimeout: llmConfig.agentTimeout || 1800,
+          subAgentTimeout: llmConfig.subAgentTimeout || 600,
+          toolTimeout: llmConfig.toolTimeout || 60,
           githubToken: otherConfig.githubToken || '',
           gitlabToken: otherConfig.gitlabToken || '',
           giteaToken: otherConfig.giteaToken || '',
@@ -111,6 +120,8 @@ export function SystemConfig() {
         setConfig({
           llmProvider: 'openai', llmApiKey: '', llmModel: '', llmBaseUrl: '',
           llmTimeout: 150000, llmTemperature: 0.1, llmMaxTokens: 4096,
+          llmFirstTokenTimeout: 30, llmStreamTimeout: 60,
+          agentTimeout: 1800, subAgentTimeout: 600, toolTimeout: 60,
           githubToken: '', gitlabToken: '', giteaToken: '',
           maxAnalyzeFiles: 0, llmConcurrency: 3, llmGapMs: 2000, outputLanguage: 'zh-CN',
         });
@@ -120,6 +131,8 @@ export function SystemConfig() {
       setConfig({
         llmProvider: 'openai', llmApiKey: '', llmModel: '', llmBaseUrl: '',
         llmTimeout: 150000, llmTemperature: 0.1, llmMaxTokens: 4096,
+        llmFirstTokenTimeout: 30, llmStreamTimeout: 60,
+        agentTimeout: 1800, subAgentTimeout: 600, toolTimeout: 60,
         githubToken: '', gitlabToken: '', giteaToken: '',
         maxAnalyzeFiles: 0, llmConcurrency: 3, llmGapMs: 2000, outputLanguage: 'zh-CN',
       });
@@ -230,6 +243,12 @@ export function SystemConfig() {
           llmModel: config.llmModel, llmBaseUrl: config.llmBaseUrl,
           llmTimeout: config.llmTimeout, llmTemperature: config.llmTemperature,
           llmMaxTokens: config.llmMaxTokens,
+          // Agent超时配置
+          llmFirstTokenTimeout: config.llmFirstTokenTimeout,
+          llmStreamTimeout: config.llmStreamTimeout,
+          agentTimeout: config.agentTimeout,
+          subAgentTimeout: config.subAgentTimeout,
+          toolTimeout: config.toolTimeout,
         },
         otherConfig: {
           githubToken: config.githubToken, gitlabToken: config.gitlabToken, giteaToken: config.giteaToken,
@@ -249,6 +268,12 @@ export function SystemConfig() {
           llmTimeout: llmConfig.llmTimeout || 150000,
           llmTemperature: llmConfig.llmTemperature ?? 0.1,
           llmMaxTokens: llmConfig.llmMaxTokens || 4096,
+          // Agent超时配置
+          llmFirstTokenTimeout: llmConfig.llmFirstTokenTimeout || 30,
+          llmStreamTimeout: llmConfig.llmStreamTimeout || 60,
+          agentTimeout: llmConfig.agentTimeout || 1800,
+          subAgentTimeout: llmConfig.subAgentTimeout || 600,
+          toolTimeout: llmConfig.toolTimeout || 60,
           githubToken: otherConfig.githubToken || '',
           gitlabToken: otherConfig.gitlabToken || '',
           giteaToken: otherConfig.giteaToken || '',
@@ -579,17 +604,23 @@ export function SystemConfig() {
             )}
 
             {/* Advanced Parameters */}
-            <details className="pt-4 border-t border-border border-dashed">
+            <details open className="pt-4 border-t border-border border-dashed">
               <summary className="font-bold uppercase cursor-pointer hover:text-primary text-muted-foreground text-sm">高级参数</summary>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+
+              {/* LLM基础参数 */}
+              <div className="mt-4 mb-2">
+                <span className="text-xs text-muted-foreground uppercase font-semibold">LLM 基础参数</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground uppercase">超时 (毫秒)</Label>
+                  <Label className="text-xs text-muted-foreground uppercase">请求超时 (毫秒)</Label>
                   <Input
                     type="number"
                     value={config.llmTimeout}
                     onChange={(e) => updateConfig('llmTimeout', Number(e.target.value))}
                     className="h-10 cyber-input"
                   />
+                  <p className="text-xs text-muted-foreground">单次LLM请求的超时时间</p>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground uppercase">温度 (0-2)</Label>
@@ -602,6 +633,7 @@ export function SystemConfig() {
                     onChange={(e) => updateConfig('llmTemperature', Number(e.target.value))}
                     className="h-10 cyber-input"
                   />
+                  <p className="text-xs text-muted-foreground">控制输出随机性，越低越确定</p>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground uppercase">最大 Tokens</Label>
@@ -611,6 +643,64 @@ export function SystemConfig() {
                     onChange={(e) => updateConfig('llmMaxTokens', Number(e.target.value))}
                     className="h-10 cyber-input"
                   />
+                  <p className="text-xs text-muted-foreground">单次请求最大输出Token数</p>
+                </div>
+              </div>
+
+              {/* Agent超时配置 */}
+              <div className="mt-6 mb-2">
+                <span className="text-xs text-muted-foreground uppercase font-semibold">Agent 超时配置</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase">首Token超时 (秒)</Label>
+                  <Input
+                    type="number"
+                    value={config.llmFirstTokenTimeout}
+                    onChange={(e) => updateConfig('llmFirstTokenTimeout', Number(e.target.value))}
+                    className="h-10 cyber-input"
+                  />
+                  <p className="text-xs text-muted-foreground">等待LLM首个Token的超时时间</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase">流式超时 (秒)</Label>
+                  <Input
+                    type="number"
+                    value={config.llmStreamTimeout}
+                    onChange={(e) => updateConfig('llmStreamTimeout', Number(e.target.value))}
+                    className="h-10 cyber-input"
+                  />
+                  <p className="text-xs text-muted-foreground">流式输出中两个Token间的超时</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase">工具超时 (秒)</Label>
+                  <Input
+                    type="number"
+                    value={config.toolTimeout}
+                    onChange={(e) => updateConfig('toolTimeout', Number(e.target.value))}
+                    className="h-10 cyber-input"
+                  />
+                  <p className="text-xs text-muted-foreground">单个工具执行的默认超时时间</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase">子Agent超时 (秒)</Label>
+                  <Input
+                    type="number"
+                    value={config.subAgentTimeout}
+                    onChange={(e) => updateConfig('subAgentTimeout', Number(e.target.value))}
+                    className="h-10 cyber-input"
+                  />
+                  <p className="text-xs text-muted-foreground">子Agent (Recon/Analysis/Verification) 超时</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase">总超时 (秒)</Label>
+                  <Input
+                    type="number"
+                    value={config.agentTimeout}
+                    onChange={(e) => updateConfig('agentTimeout', Number(e.target.value))}
+                    className="h-10 cyber-input"
+                  />
+                  <p className="text-xs text-muted-foreground">整个Agent审计任务的最大时间</p>
                 </div>
               </div>
             </details>
