@@ -182,29 +182,35 @@ class AzureOpenAIEmbedding(EmbeddingProvider):
 class OllamaEmbedding(EmbeddingProvider):
     """
     Ollama 本地嵌入服务
-    
+
     使用新的 /api/embed 端点 (2024年起):
     - 支持批量嵌入
     - 使用 'input' 参数（支持字符串或字符串数组）
     """
-    
+
+    # 默认维度映射（基础模型版本）
+    # 注意：同一模型不同参数规模可能有不同维度
+    # 例如 qwen3-embedding:0.6b=1024, qwen3-embedding:8b=4096
+    # 用户可通过 dimension 参数覆盖
     MODELS = {
         "nomic-embed-text": 768,
         "mxbai-embed-large": 1024,
         "all-minilm": 384,
         "snowflake-arctic-embed": 1024,
         "bge-m3": 1024,
-        "qwen3-embedding": 1024,
+        "qwen3-embedding": 1024,  # 默认值，8b版本为4096
     }
-    
+
     def __init__(
         self,
         base_url: Optional[str] = None,
         model: str = "nomic-embed-text",
+        dimension: Optional[int] = None,
     ):
         self.base_url = base_url or "http://localhost:11434"
         self.model = model
-        self._dimension = self.MODELS.get(model, 768)
+        # 用户指定的维度优先，否则使用默认映射
+        self._dimension = dimension if dimension else self.MODELS.get(model, 768)
     
     @property
     def dimension(self) -> int:
@@ -559,7 +565,7 @@ class EmbeddingService:
     """
     嵌入服务
     统一管理嵌入模型和缓存
-    
+
     支持的提供商:
     - openai: OpenAI 官方
     - azure: Azure OpenAI
@@ -568,13 +574,14 @@ class EmbeddingService:
     - huggingface: HuggingFace Inference API
     - jina: Jina AI
     """
-    
+
     def __init__(
         self,
         provider: Optional[str] = None,
         model: Optional[str] = None,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
+        dimension: Optional[int] = None,
         cache_enabled: bool = True,
     ):
         """
@@ -585,6 +592,7 @@ class EmbeddingService:
             model: 模型名称
             api_key: API Key
             base_url: API Base URL
+            dimension: 向量维度（可选，用于覆盖默认值）
             cache_enabled: 是否启用缓存
         """
         self.cache_enabled = cache_enabled
@@ -595,6 +603,7 @@ class EmbeddingService:
         self.model = model or getattr(settings, 'EMBEDDING_MODEL', 'text-embedding-3-small')
         self.api_key = api_key
         self.base_url = base_url
+        self.custom_dimension = dimension
 
         # 创建提供商实例
         self._provider = self._create_provider(
@@ -602,9 +611,10 @@ class EmbeddingService:
             model=self.model,
             api_key=api_key,
             base_url=base_url,
+            dimension=dimension,
         )
 
-        logger.info(f"Embedding service initialized with {self.provider}/{self.model}")
+        logger.info(f"Embedding service initialized with {self.provider}/{self.model}, dimension={self._provider.dimension}")
     
     def _create_provider(
         self,
@@ -612,28 +622,29 @@ class EmbeddingService:
         model: str,
         api_key: Optional[str],
         base_url: Optional[str],
+        dimension: Optional[int] = None,
     ) -> EmbeddingProvider:
         """创建嵌入提供商实例"""
         provider = provider.lower()
-        
+
         if provider == "ollama":
-            return OllamaEmbedding(base_url=base_url, model=model)
-        
+            return OllamaEmbedding(base_url=base_url, model=model, dimension=dimension)
+
         elif provider == "azure":
             return AzureOpenAIEmbedding(api_key=api_key, base_url=base_url, model=model)
-        
+
         elif provider == "cohere":
             return CohereEmbedding(api_key=api_key, base_url=base_url, model=model)
-        
+
         elif provider == "huggingface":
             return HuggingFaceEmbedding(api_key=api_key, base_url=base_url, model=model)
-        
+
         elif provider == "jina":
             return JinaEmbedding(api_key=api_key, base_url=base_url, model=model)
-        
+
         elif provider == "qwen":
             return QwenEmbedding(api_key=api_key, base_url=base_url, model=model)
-        
+
         else:
             # 默认使用 OpenAI
             return OpenAIEmbedding(api_key=api_key, base_url=base_url, model=model)

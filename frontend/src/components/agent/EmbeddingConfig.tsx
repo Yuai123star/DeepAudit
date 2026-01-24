@@ -73,6 +73,7 @@ export default function EmbeddingConfigPanel() {
   const [selectedModel, setSelectedModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
+  const [customDimension, setCustomDimension] = useState<number | null>(null);
   const [batchSize, setBatchSize] = useState(100);
 
   // 加载数据
@@ -107,6 +108,7 @@ export default function EmbeddingConfigPanel() {
         setSelectedModel(configRes.data.model);
         setApiKey(configRes.data.api_key || "");
         setBaseUrl(configRes.data.base_url || "");
+        setCustomDimension(configRes.data.dimensions || null);
         setBatchSize(configRes.data.batch_size);
       }
     } catch (error) {
@@ -135,6 +137,7 @@ export default function EmbeddingConfigPanel() {
         model: selectedModel,
         api_key: apiKey || undefined,
         base_url: baseUrl || undefined,
+        dimensions: customDimension || undefined,
         batch_size: batchSize,
       });
 
@@ -162,6 +165,7 @@ export default function EmbeddingConfigPanel() {
         model: selectedModel,
         api_key: apiKey || undefined,
         base_url: baseUrl || undefined,
+        dimension: customDimension || undefined,
       });
 
       setTestResult(response.data);
@@ -337,6 +341,27 @@ export default function EmbeddingConfigPanel() {
           />
           <p className="text-xs text-muted-foreground">
             用于 API 代理或自托管服务
+          </p>
+        </div>
+
+        {/* 自定义向量维度 */}
+        <div className="space-y-2">
+          <Label className="text-xs font-bold text-muted-foreground uppercase">
+            自定义向量维度 <span className="text-muted-foreground">(可选)</span>
+          </Label>
+          <Input
+            type="number"
+            value={customDimension || ""}
+            onChange={(e) => setCustomDimension(e.target.value ? parseInt(e.target.value) : null)}
+            placeholder="留空使用默认值"
+            min={64}
+            max={8192}
+            className="h-10 cyber-input w-40"
+          />
+          <p className="text-xs text-muted-foreground">
+            适用于 Ollama 等场景：同一模型不同参数规模可能有不同维度
+            <br />
+            例如 qwen3-embedding:0.6b=1024, qwen3-embedding:8b=4096
           </p>
         </div>
 

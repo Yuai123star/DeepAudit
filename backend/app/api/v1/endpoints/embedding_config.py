@@ -61,6 +61,7 @@ class TestEmbeddingRequest(BaseModel):
     model: str
     api_key: Optional[str] = None
     base_url: Optional[str] = None
+    dimension: Optional[int] = None  # 自定义维度（Ollama等场景）
     test_text: str = "这是一段测试文本，用于验证嵌入模型是否正常工作。"
 
 
@@ -275,8 +276,8 @@ async def get_current_config(
     """
     config = await get_embedding_config_from_db(db, current_user.id)
 
-    # 获取维度
-    dimensions = _get_model_dimensions(config.provider, config.model)
+    # 获取维度：优先使用用户配置的维度，否则使用默认值
+    dimensions = config.dimensions if config.dimensions else _get_model_dimensions(config.provider, config.model)
 
     return EmbeddingConfigResponse(
         provider=config.provider,
@@ -326,18 +327,19 @@ async def test_embedding(
     """
     FIXED_DURATION = 3.0  # 固定响应时间，防止SSRF时间侧信道攻击
     start_time = time.time()
-    
+
     try:
         from app.services.rag.embeddings import EmbeddingService
-        
+
         service = EmbeddingService(
             provider=request.provider,
             model=request.model,
             api_key=request.api_key,
             base_url=request.base_url,
+            dimension=request.dimension,
             cache_enabled=False,
         )
-        
+
         embedding = await service.embed(request.test_text)
 
         elapsed = time.time() - start_time
@@ -393,35 +395,41 @@ def _get_model_dimensions(provider: str, model: str) -> int:
         "text-embedding-3-small": 1536,
         "text-embedding-3-large": 3072,
         "text-embedding-ada-002": 1536,
-        
+
         # Ollama
         "nomic-embed-text": 768,
         "mxbai-embed-large": 1024,
         "all-minilm": 384,
         "snowflake-arctic-embed": 1024,
-        
+        "bge-m3": 1024,
+        "qwen3-embedding": 1024,  # 默认值，8b版本为4096
+
         # Cohere
         "embed-english-v3.0": 1024,
         "embed-multilingual-v3.0": 1024,
         "embed-english-light-v3.0": 384,
         "embed-multilingual-light-v3.0": 384,
-        
+        "embed-v4.0": 1024,
+
         # HuggingFace
         "sentence-transformers/all-MiniLM-L6-v2": 384,
         "sentence-transformers/all-mpnet-base-v2": 768,
         "BAAI/bge-large-zh-v1.5": 1024,
         "BAAI/bge-m3": 1024,
-        
+        "BAAI/bge-small-en-v1.5": 384,
+        "BAAI/bge-base-en-v1.5": 768,
+
         # Jina
         "jina-embeddings-v2-base-code": 768,
         "jina-embeddings-v2-base-en": 768,
         "jina-embeddings-v2-base-zh": 768,
-        
+        "jina-embeddings-v2-small-en": 512,
+
         # Qwen (DashScope)
         "text-embedding-v4": 1024,  # 支持维度: 2048, 1536, 1024(默认), 768, 512, 256, 128, 64
         "text-embedding-v3": 1024,  # 支持维度: 1024(默认), 768, 512, 256, 128, 64
         "text-embedding-v2": 1536,  # 支持维度: 1536
     }
-    
+
     return dimensions_map.get(model, 768)
 
