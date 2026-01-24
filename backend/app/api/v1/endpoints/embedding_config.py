@@ -323,11 +323,12 @@ async def test_embedding(
     测试嵌入模型配置
     """
     import time
+    import asyncio
+
+    FIXED_DURATION = 10.0
+    start_time = time.time()
     
     try:
-        start_time = time.time()
-        
-        # 创建临时嵌入服务
         from app.services.rag.embeddings import EmbeddingService
         
         service = EmbeddingService(
@@ -338,8 +339,11 @@ async def test_embedding(
             cache_enabled=False,
         )
         
-        # 执行嵌入
         embedding = await service.embed(request.test_text)
+        
+        elapsed = time.time() - start_time
+        if elapsed < FIXED_DURATION:
+            await asyncio.sleep(FIXED_DURATION - elapsed)
         
         latency_ms = int((time.time() - start_time) * 1000)
         
@@ -352,6 +356,11 @@ async def test_embedding(
         )
         
     except Exception as e:
+        # 发生异常时也同样等待，确保时间特征一致
+        elapsed = time.time() - start_time
+        if elapsed < FIXED_DURATION:
+            await asyncio.sleep(FIXED_DURATION - elapsed)
+
         return TestEmbeddingResponse(
             success=False,
             message=f"嵌入失败: {str(e)}",
