@@ -13,6 +13,8 @@ Memory Compressor - 对话历史压缩器
 import logging
 from typing import Any, Dict, List, Optional
 
+from .tokenizer import TokenEstimator
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,20 +24,20 @@ MIN_RECENT_MESSAGES = 15    # 最少保留的最近消息数
 COMPRESSION_THRESHOLD = 0.9  # 触发压缩的阈值（90%）
 
 
-def estimate_tokens(text: str) -> int:
+def estimate_tokens(text: str, model: str = "gpt-4") -> int:
     """
     估算文本的token数量
-    
-    简单估算：英文约4字符/token，中文约2字符/token
+
+    使用TokenEstimator进行精确计数（tiktoken）或改进的启发式估算。
+
+    Args:
+        text: 要估算的文本
+        model: 模型名称
+
+    Returns:
+        Token数量
     """
-    if not text:
-        return 0
-    
-    # 简单估算
-    ascii_chars = sum(1 for c in text if ord(c) < 128)
-    non_ascii_chars = len(text) - ascii_chars
-    
-    return (ascii_chars // 4) + (non_ascii_chars // 2) + 1
+    return TokenEstimator.count_tokens(text, model)
 
 
 def get_message_tokens(msg: Dict[str, Any]) -> int:

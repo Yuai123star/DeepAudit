@@ -314,7 +314,9 @@ class LiteLLMAdapter(BaseLLMAdapter):
         messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
         # 🔥 估算输入 token 数量（用于在无法获取真实 usage 时进行估算）
-        input_tokens_estimate = sum(estimate_tokens(msg["content"]) for msg in messages)
+        input_tokens_estimate = sum(
+            estimate_tokens(msg["content"], self.config.model) for msg in messages
+        )
 
         kwargs = {
             "model": self._litellm_model,
@@ -379,7 +381,9 @@ class LiteLLMAdapter(BaseLLMAdapter):
                     # 流式完成
                     # 🔥 如果没有从 chunk 获取到 usage，进行估算
                     if not final_usage:
-                        output_tokens_estimate = estimate_tokens(accumulated_content)
+                        output_tokens_estimate = estimate_tokens(
+                            accumulated_content, self.config.model
+                        )
                         final_usage = {
                             "prompt_tokens": input_tokens_estimate,
                             "completion_tokens": output_tokens_estimate,
@@ -403,7 +407,9 @@ class LiteLLMAdapter(BaseLLMAdapter):
             if accumulated_content:
                 logger.warning(f"Stream ended without finish_reason, returning accumulated content ({len(accumulated_content)} chars)")
                 if not final_usage:
-                    output_tokens_estimate = estimate_tokens(accumulated_content)
+                    output_tokens_estimate = estimate_tokens(
+                        accumulated_content, self.config.model
+                    )
                     final_usage = {
                         "prompt_tokens": input_tokens_estimate,
                         "completion_tokens": output_tokens_estimate,
@@ -432,7 +438,9 @@ class LiteLLMAdapter(BaseLLMAdapter):
                 retry_seconds = float(retry_match.group(1)) if retry_match else 60
                 user_message = f"API 调用频率超限，建议等待 {int(retry_seconds)} 秒后重试"
 
-            output_tokens_estimate = estimate_tokens(accumulated_content) if accumulated_content else 0
+            output_tokens_estimate = estimate_tokens(
+                accumulated_content, self.config.model
+            ) if accumulated_content else 0
             yield {
                 "type": "error",
                 "error_type": error_type,
@@ -497,7 +505,9 @@ class LiteLLMAdapter(BaseLLMAdapter):
                 error_type = "unknown"
                 user_message = "LLM 调用发生错误，请重试"
 
-            output_tokens_estimate = estimate_tokens(accumulated_content) if accumulated_content else 0
+            output_tokens_estimate = estimate_tokens(
+                accumulated_content, self.config.model
+            ) if accumulated_content else 0
             yield {
                 "type": "error",
                 "error_type": error_type,

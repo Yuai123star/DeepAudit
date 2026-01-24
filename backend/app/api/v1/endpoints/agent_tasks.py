@@ -541,9 +541,23 @@ async def _execute_agent_task(task_id: str):
                 task.completed_at = datetime.now(timezone.utc)
                 task.current_phase = AgentTaskPhase.REPORTING
                 task.findings_count = saved_count  # 🔥 v2.1: 使用实际保存的数量（排除幻觉）
-                task.total_iterations = result.iterations
-                task.tool_calls_count = result.tool_calls
-                task.tokens_used = result.tokens_used
+
+                # 🔥 CRITICAL FIX: 累加所有子 Agent 的统计，而不仅仅是 Orchestrator 的
+                total_iterations = result.iterations
+                tool_calls_count = result.tool_calls
+                tokens_used = result.tokens_used
+
+                if hasattr(orchestrator, 'sub_agents'):
+                    for agent in orchestrator.sub_agents.values():
+                        if hasattr(agent, 'get_stats'):
+                            sub_stats = agent.get_stats()
+                            total_iterations += sub_stats.get("iterations", 0)
+                            tool_calls_count += sub_stats.get("tool_calls", 0)
+                            tokens_used += sub_stats.get("tokens_used", 0)
+
+                task.total_iterations = total_iterations
+                task.tool_calls_count = tool_calls_count
+                task.tokens_used = tokens_used
 
                 # 🔥 统计文件数量
                 # analyzed_files = 实际扫描过的文件数（任务完成时等于 total_files）
