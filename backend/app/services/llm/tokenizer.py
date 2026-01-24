@@ -13,31 +13,51 @@ logger = logging.getLogger(__name__)
 # tiktoken 编码器缓存
 _encoders: dict = {}
 _tiktoken_available: bool | None = None  # None=未检测, True=可用, False=不可用
+_logged_method: bool = False  # 是否已输出使用方案日志
 
 
-def _check_tiktoken_availability() -> bool:
-    """启动时检测 tiktoken 是否可用"""
-    global _tiktoken_available
+def _check_tiktoken_availability(log_result: bool = False) -> bool:
+    """
+    检测 tiktoken 是否可用
+
+    Args:
+        log_result: 是否输出日志（首次实际使用时输出）
+    """
+    global _tiktoken_available, _logged_method
+
     if _tiktoken_available is not None:
+        # 已检测过，只在首次需要时输出日志
+        if log_result and not _logged_method:
+            _logged_method = True
+            if _tiktoken_available:
+                logger.info("✅ Token 计数方案: tiktoken 精确计数")
+            else:
+                logger.warning("⚠️ Token 计数方案: 启发式估算")
         return _tiktoken_available
 
     try:
         import tiktoken
         tiktoken.get_encoding("cl100k_base")
         _tiktoken_available = True
-        logger.info("✅ Token 计数方案: tiktoken 精确计数")
+        if log_result:
+            _logged_method = True
+            logger.info("✅ Token 计数方案: tiktoken 精确计数")
     except ImportError:
         _tiktoken_available = False
-        logger.warning("⚠️ Token 计数方案: 启发式估算 (tiktoken 未安装)")
+        if log_result:
+            _logged_method = True
+            logger.warning("⚠️ Token 计数方案: 启发式估算 (tiktoken 未安装)")
     except Exception as e:
         _tiktoken_available = False
-        logger.warning(f"⚠️ Token 计数方案: 启发式估算 (tiktoken 初始化失败: {e})")
+        if log_result:
+            _logged_method = True
+            logger.warning(f"⚠️ Token 计数方案: 启发式估算 (tiktoken 初始化失败: {e})")
 
     return _tiktoken_available
 
 
-# 模块加载时检测
-_check_tiktoken_availability()
+# 模块加载时静默检测（不输出日志）
+_check_tiktoken_availability(log_result=False)
 
 
 def _get_tiktoken_encoder(model: str):
@@ -94,6 +114,9 @@ class TokenEstimator:
         """
         if not text:
             return 0
+
+        # 首次调用时输出使用方案日志
+        _check_tiktoken_availability(log_result=True)
 
         # 尝试使用 tiktoken
         encoder = _get_tiktoken_encoder(model)
