@@ -4,7 +4,9 @@
 使用 UserConfig.other_config 持久化存储
 """
 
+import asyncio
 import json
+import time
 import uuid
 from typing import Any, Optional, List
 from fastapi import APIRouter, Depends, HTTPException
@@ -322,10 +324,7 @@ async def test_embedding(
     """
     测试嵌入模型配置
     """
-    import time
-    import asyncio
-
-    FIXED_DURATION = 10.0
+    FIXED_DURATION = 3.0  # 固定响应时间，防止SSRF时间侧信道攻击
     start_time = time.time()
     
     try:
@@ -340,12 +339,11 @@ async def test_embedding(
         )
         
         embedding = await service.embed(request.test_text)
-        
+
         elapsed = time.time() - start_time
+        latency_ms = int(elapsed * 1000)  # 在sleep前计算实际延迟
         if elapsed < FIXED_DURATION:
             await asyncio.sleep(FIXED_DURATION - elapsed)
-        
-        latency_ms = int((time.time() - start_time) * 1000)
         
         return TestEmbeddingResponse(
             success=True,
