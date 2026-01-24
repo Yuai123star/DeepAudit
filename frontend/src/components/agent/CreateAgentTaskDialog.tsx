@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { BranchSelector } from "@/components/ui/branch-selector";
 import {
   Search,
   ChevronRight,
@@ -311,18 +312,13 @@ export default function CreateAgentTaskDialog({
                       <span className="text-sm text-blue-400 font-mono">Loading...</span>
                     </div>
                   ) : (
-                    <Select value={branch} onValueChange={setBranch}>
-                      <SelectTrigger className="flex-1 h-9 cyber-input">
-                        <SelectValue placeholder="Select branch" />
-                      </SelectTrigger>
-                      <SelectContent className="cyber-dialog border-border">
-                        {branches.map((b) => (
-                          <SelectItem key={b} value={b} className="font-mono text-foreground">
-                            {b}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <BranchSelector
+                      value={branch}
+                      onChange={setBranch}
+                      branches={branches}
+                      placeholder="Select branch"
+                      className="flex-1"
+                    />
                   )}
                 </div>
               )}

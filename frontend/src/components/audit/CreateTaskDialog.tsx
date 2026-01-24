@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { BranchSelector } from "@/components/ui/branch-selector";
 import {
   Collapsible,
   CollapsibleContent,
@@ -400,18 +401,13 @@ export default function CreateTaskDialog({
                         <span className="text-sm text-blue-600 dark:text-blue-400 font-mono">加载中...</span>
                       </div>
                     ) : (
-                      <Select value={branch} onValueChange={setBranch}>
-                        <SelectTrigger className="h-9 flex-1 cyber-input">
-                          <SelectValue placeholder="选择分支" />
-                        </SelectTrigger>
-                        <SelectContent className="cyber-dialog border-border">
-                          {branches.map((b) => (
-                            <SelectItem key={b} value={b} className="font-mono">
-                              {b}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <BranchSelector
+                        value={branch}
+                        onChange={setBranch}
+                        branches={branches}
+                        placeholder="选择分支"
+                        className="flex-1"
+                      />
                     )}
                   </div>
                 ) : (
