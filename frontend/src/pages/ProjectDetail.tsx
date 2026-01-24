@@ -29,18 +29,14 @@ import {
   Terminal
 } from "lucide-react";
 import { api } from "@/shared/config/database";
-import { runRepositoryAudit, scanStoredZipFile } from "@/features/projects/services";
 import type { Project, AuditTask, CreateProjectForm, AuditIssue } from "@/shared/types";
 import type { AgentFinding, AgentTask } from "@/shared/api/agentTasks";
 import { getAgentTasks } from "@/shared/api/agentTasks";
 import { apiClient } from "@/shared/api/serverClient";
-import { hasZipFile } from "@/shared/utils/zipStorage";
 import { isRepositoryProject, getSourceTypeLabel, getRepositoryPlatformLabel } from "@/shared/utils/projectUtils";
 import { toast } from "sonner";
 import CreateTaskDialog from "@/components/audit/CreateTaskDialog";
-import FileSelectionDialog from "@/components/audit/FileSelectionDialog";
 import TerminalProgressDialog from "@/components/audit/TerminalProgressDialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { SUPPORTED_LANGUAGES, REPOSITORY_PLATFORMS } from "@/shared/constants";
 import type { AggregatedAgentFinding, AggregatedAuditIssue, IssuesSummary, LatestProblem, UnifiedTask } from "@/shared/types";
 import {
@@ -58,7 +54,6 @@ export default function ProjectDetail() {
   const [auditTasks, setAuditTasks] = useState<AuditTask[]>([]);
   const [agentTasks, setAgentTasks] = useState<AgentTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scanning, setScanning] = useState(false);
   const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
   const [showTerminalDialog, setShowTerminalDialog] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
@@ -83,9 +78,6 @@ export default function ProjectDetail() {
     isLimited: false,
     maxTasks: 20
   });
-
-  const [showFileSelectionDialog, setShowFileSelectionDialog] = useState(false);
-  const [showAuditOptionsDialog, setShowAuditOptionsDialog] = useState(false);
 
   // ============ Helpers ============
 
@@ -448,87 +440,7 @@ export default function ProjectDetail() {
   }, [auditTasks, agentTasks]);
 
   const handleRunAudit = () => {
-    setShowAuditOptionsDialog(true);
-  };
-
-  const handleStartFullAudit = () => {
-    setShowAuditOptionsDialog(false);
-    startAudit(undefined);
-  };
-
-  const handleOpenCustomAudit = () => {
-    setShowAuditOptionsDialog(false);
-    setShowFileSelectionDialog(true);
-  };
-
-  const handleStartCustomAudit = (files: string[]) => {
-    startAudit(files);
-  };
-
-  const startAudit = async (filePaths?: string[]) => {
-    if (!project || !id) return;
-
-    if (project.repository_url) {
-      try {
-        setScanning(true);
-        console.log('开始启动仓库审计任务...', filePaths ? `指定 ${filePaths.length} 个文件` : '全量扫描');
-        const taskId = await runRepositoryAudit({
-          projectId: id,
-          repoUrl: project.repository_url,
-          branch: project.default_branch || 'main',
-          createdBy: undefined,
-          filePaths: filePaths
-        });
-
-        console.log('审计任务创建成功，taskId:', taskId);
-
-        setCurrentTaskId(taskId);
-        setShowTerminalDialog(true);
-
-        loadProjectData();
-      } catch (e: any) {
-        console.error('启动审计失败:', e);
-        toast.error(e?.message || '启动审计失败');
-      } finally {
-        setScanning(false);
-      }
-    } else {
-      try {
-        setScanning(true);
-        const hasFile = await hasZipFile(id);
-
-        if (hasFile) {
-          console.log('找到后端存储的ZIP文件，开始启动审计...', filePaths ? `指定 ${filePaths.length} 个文件` : '全量扫描');
-          try {
-            const taskId = await scanStoredZipFile({
-              projectId: id,
-              excludePatterns: ['node_modules/**', '.git/**', 'dist/**', 'build/**'],
-              createdBy: 'local-user',
-              filePaths: filePaths
-            });
-
-            console.log('审计任务创建成功，taskId:', taskId);
-
-            setCurrentTaskId(taskId);
-            setShowTerminalDialog(true);
-
-            loadProjectData();
-          } catch (e: any) {
-            console.error('启动审计失败:', e);
-            toast.error(e?.message || '启动审计失败');
-          } finally {
-            setScanning(false);
-          }
-        } else {
-          setScanning(false);
-          toast.warning('此项目未配置仓库地址，也未上传ZIP文件。请先在项目设置中配置仓库地址，或通过"新建任务"上传ZIP文件。');
-        }
-      } catch (error) {
-        console.error('启动审计失败:', error);
-        setScanning(false);
-        toast.error('读取ZIP文件失败，请检查项目配置');
-      }
-    }
+    setShowCreateTaskDialog(true);
   };
 
   const handleSaveSettings = async () => {
@@ -661,9 +573,9 @@ export default function ProjectDetail() {
         </div>
 
         <div className="flex items-center space-x-3">
-          <Button onClick={handleRunAudit} disabled={scanning} className="cyber-btn-primary">
+          <Button onClick={handleRunAudit} className="cyber-btn-primary">
             <Shield className="w-4 h-4 mr-2" />
-            {scanning ? '正在启动...' : '启动审计'}
+            启动审计
           </Button>
           <Button variant="outline" onClick={handleOpenSettings} className="cyber-btn-outline">
             <Edit className="w-4 h-4 mr-2" />
@@ -991,68 +903,6 @@ export default function ProjectDetail() {
         onOpenChange={setShowTerminalDialog}
         taskId={currentTaskId}
         taskType="repository"
-      />
-
-      {/* 审计选项对话框 */}
-      <Dialog open={showAuditOptionsDialog} onOpenChange={setShowAuditOptionsDialog}>
-        <DialogContent className="max-w-md cyber-card border-border cyber-dialog p-0">
-          {/* Terminal Header */}
-          <div className="flex items-center gap-2 px-4 py-3 cyber-bg-elevated border-b border-border">
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-red-500/80" />
-              <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-              <div className="w-3 h-3 rounded-full bg-green-500/80" />
-            </div>
-            <span className="ml-2 font-mono text-xs text-muted-foreground tracking-wider">
-              audit_options@deepaudit
-            </span>
-          </div>
-
-          <DialogHeader className="px-6 pt-4">
-            <DialogTitle className="font-mono text-lg uppercase tracking-wider flex items-center gap-2 text-foreground">
-              <Shield className="w-5 h-5 text-primary" />
-              选择审计方式
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="p-6 space-y-4">
-            <Button
-              onClick={handleStartFullAudit}
-              className="w-full h-auto py-4 flex flex-col items-center justify-center space-y-2 cyber-btn-outline hover:bg-muted"
-            >
-              <div className="flex items-center space-x-2">
-                <Activity className="w-5 h-5" />
-                <span className="text-lg font-bold uppercase">全量审计</span>
-              </div>
-              <span className="text-xs text-muted-foreground font-mono">扫描项目中的所有文件</span>
-            </Button>
-
-            <Button
-              onClick={handleOpenCustomAudit}
-              className="w-full h-auto py-4 flex flex-col items-center justify-center space-y-2 cyber-btn-outline hover:bg-muted"
-            >
-              <div className="flex items-center space-x-2">
-                <FileText className="w-5 h-5" />
-                <span className="text-lg font-bold uppercase">自定义审计</span>
-              </div>
-              <span className="text-xs text-muted-foreground font-mono">选择特定文件进行扫描</span>
-            </Button>
-          </div>
-
-          <DialogFooter className="p-4 border-t border-border bg-muted/50">
-            <Button variant="outline" onClick={() => setShowAuditOptionsDialog(false)} className="w-full cyber-btn-outline">
-              取消
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 文件选择对话框 */}
-      <FileSelectionDialog
-        open={showFileSelectionDialog}
-        onOpenChange={setShowFileSelectionDialog}
-        projectId={id || ''}
-        onConfirm={handleStartCustomAudit}
       />
     </div>
   );
