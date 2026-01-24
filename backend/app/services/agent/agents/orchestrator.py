@@ -18,7 +18,7 @@ import re
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
-from .base import BaseAgent, AgentConfig, AgentResult, AgentType, AgentPattern
+from .base import BaseAgent, AgentConfig, AgentResult, AgentType, AgentPattern, TaskHandoff
 from ..json_parser import AgentJsonParser
 from ..prompts import MULTI_AGENT_RULES, CORE_SECURITY_PRINCIPLES
 
@@ -154,15 +154,18 @@ class OrchestratorAgent(BaseAgent):
         
         # 🔥 Tracer 遥测支持
         self.tracer = tracer
-        
+
         # 🔥 存储运行时上下文，用于传递给子 Agent
         self._runtime_context: Dict[str, Any] = {}
-        
+
         # 🔥 跟踪已调度的 Agent 任务，避免重复调度
         self._dispatched_tasks: Dict[str, int] = {}  # agent_name -> dispatch_count
 
         # 🔥 保存各个 Agent 的完整结果，用于传递给后续 Agent
         self._agent_results: Dict[str, Dict[str, Any]] = {}  # agent_name -> full result data
+
+        # 🔥 保存各个 Agent 返回的 TaskHandoff，用于 Agent 间通信
+        self._agent_handoffs: Dict[str, TaskHandoff] = {}  # agent_name -> TaskHandoff
     
     def register_sub_agent(self, name: str, agent: BaseAgent):
         """注册子 Agent"""
@@ -221,6 +224,7 @@ class OrchestratorAgent(BaseAgent):
         self._steps = []
         self._all_findings = []
         self._agent_results = {}  # 🔥 重置 Agent 结果缓存
+        self._agent_handoffs = {}  # 🔥 重置 Agent handoff 缓存
         final_result = None
         error_message = None  # 🔥 跟踪错误信息
         
@@ -695,6 +699,9 @@ Action Input: {{"参数": "值"}}
             for prev_agent, prev_data in self._agent_results.items():
                 previous_results[prev_agent] = {"data": prev_data}
 
+            # 🔥 构建 TaskHandoff - Agent 间的结构化通信协议
+            handoff = self._build_handoff_for_agent(agent_name, task, context)
+
             sub_input = {
                 "task": task,
                 "task_context": context,
@@ -702,6 +709,7 @@ Action Input: {{"参数": "值"}}
                 "config": self._runtime_context.get("config", {}),
                 "project_root": self._runtime_context.get("project_root", "."),
                 "previous_results": previous_results,
+                "handoff": handoff.to_dict() if handoff else None,  # 🔥 传递 TaskHandoff
             }
 
             # 🔥 执行子 Agent 前检查取消状态
@@ -786,6 +794,16 @@ Action Input: {{"参数": "值"}}
                 # 🔥 FIX: 保存 Agent 的完整结果，供后续 Agent 使用
                 self._agent_results[agent_name] = data
                 logger.info(f"[Orchestrator] Saved {agent_name} result with keys: {list(data.keys())}")
+
+                # 🔥 保存 Agent 返回的 handoff，用于传递给后续 Agent
+                if result.handoff:
+                    if not hasattr(self, '_agent_handoffs'):
+                        self._agent_handoffs = {}
+                    self._agent_handoffs[agent_name] = result.handoff
+                    logger.info(
+                        f"[Orchestrator] Saved {agent_name} handoff: "
+                        f"summary={result.handoff.summary[:50]}..."
+                    )
 
                 # 🔥 CRITICAL FIX: 收集发现 - 支持多种字段名
                 # findings 字段通常来自 Analysis/Verification Agent
@@ -1250,7 +1268,215 @@ Action Input: {{"参数": "值"}}
     def get_conversation_history(self) -> List[Dict[str, str]]:
         """获取对话历史"""
         return self._conversation_history
-    
+
     def get_steps(self) -> List[AgentStep]:
         """获取执行步骤"""
         return self._steps
+
+    def _build_handoff_for_agent(
+        self,
+        target_agent: str,
+        task: str,
+        context: str,
+    ) -> Optional[TaskHandoff]:
+        """
+        为目标 Agent 构建 TaskHandoff
+
+        根据目标 Agent 类型，从之前的 Agent 结果中提取相关信息，
+        构建结构化的任务交接协议。
+
+        优先使用前序 Agent 返回的 handoff（如果存在），否则从 _agent_results 构建。
+
+        Args:
+            target_agent: 目标 Agent 名称 (recon/analysis/verification)
+            task: 任务描述
+            context: 任务上下文
+
+        Returns:
+            TaskHandoff 对象，如果没有前序信息则返回 None
+        """
+        # 🔥 如果是第一个 Agent (recon)，没有前序信息
+        if target_agent == "recon" and not self._agent_results:
+            return None
+
+        # 🔥 优先使用前序 Agent 返回的 handoff
+        # Analysis Agent 需要 Recon 的 handoff
+        if target_agent == "analysis" and "recon" in self._agent_handoffs:
+            recon_handoff = self._agent_handoffs["recon"]
+            logger.info(f"[Orchestrator] Using Recon's handoff for Analysis Agent")
+            # 更新目标 Agent
+            return TaskHandoff(
+                from_agent=recon_handoff.from_agent,
+                to_agent=target_agent,
+                summary=recon_handoff.summary,
+                work_completed=recon_handoff.work_completed,
+                key_findings=recon_handoff.key_findings,
+                insights=recon_handoff.insights,
+                suggested_actions=recon_handoff.suggested_actions,
+                attention_points=recon_handoff.attention_points,
+                priority_areas=recon_handoff.priority_areas,
+                context_data=recon_handoff.context_data,
+                confidence=recon_handoff.confidence,
+            )
+
+        # Verification Agent 需要 Analysis 的 handoff（也可能需要 Recon 的信息）
+        if target_agent == "verification" and "analysis" in self._agent_handoffs:
+            analysis_handoff = self._agent_handoffs["analysis"]
+            logger.info(f"[Orchestrator] Using Analysis's handoff for Verification Agent")
+
+            # 合并 Recon 的上下文信息（如果有）
+            context_data = dict(analysis_handoff.context_data)
+            if "recon" in self._agent_handoffs:
+                recon_handoff = self._agent_handoffs["recon"]
+                context_data["recon_tech_stack"] = recon_handoff.context_data.get("tech_stack", {})
+                context_data["recon_entry_points"] = recon_handoff.context_data.get("entry_points", [])
+
+            return TaskHandoff(
+                from_agent=analysis_handoff.from_agent,
+                to_agent=target_agent,
+                summary=analysis_handoff.summary,
+                work_completed=analysis_handoff.work_completed,
+                key_findings=analysis_handoff.key_findings,
+                insights=analysis_handoff.insights,
+                suggested_actions=analysis_handoff.suggested_actions,
+                attention_points=analysis_handoff.attention_points,
+                priority_areas=analysis_handoff.priority_areas,
+                context_data=context_data,
+                confidence=analysis_handoff.confidence,
+            )
+
+        # 🔥 如果没有前序 Agent 的 handoff，从 _agent_results 构建（回退逻辑）
+        logger.info(f"[Orchestrator] Building handoff from _agent_results for {target_agent}")
+
+        # 🔥 收集工作摘要和关键发现
+        work_completed = []
+        key_findings = []
+        insights = []
+        suggested_actions = []
+        attention_points = []
+        priority_areas = []
+        context_data = {}
+
+        # 从 Recon 结果构建 handoff（给 Analysis）
+        if target_agent == "analysis" and "recon" in self._agent_results:
+            recon_data = self._agent_results["recon"]
+
+            work_completed.append("完成项目信息收集和技术栈识别")
+
+            # 提取技术栈信息
+            tech_stack = recon_data.get("tech_stack", {})
+            if tech_stack:
+                work_completed.append(
+                    f"识别技术栈: {', '.join(tech_stack.get('languages', []))} / "
+                    f"{', '.join(tech_stack.get('frameworks', []))}"
+                )
+                context_data["tech_stack"] = tech_stack
+
+            # 提取入口点
+            entry_points = recon_data.get("entry_points", [])
+            if entry_points:
+                work_completed.append(f"发现 {len(entry_points)} 个入口点")
+                context_data["entry_points"] = entry_points[:20]  # 限制数量
+                for ep in entry_points[:10]:
+                    if isinstance(ep, dict):
+                        attention_points.append(
+                            f"[{ep.get('type', 'unknown')}] {ep.get('file', '')}:{ep.get('line', '')}"
+                        )
+
+            # 提取高风险区域
+            high_risk_areas = recon_data.get("high_risk_areas", [])
+            if high_risk_areas:
+                insights.append(f"发现 {len(high_risk_areas)} 个高风险区域需要重点分析")
+                priority_areas.extend(high_risk_areas[:15])
+
+            # 提取初步发现
+            initial_findings = recon_data.get("initial_findings", [])
+            if initial_findings:
+                for f in initial_findings[:10]:
+                    if isinstance(f, dict):
+                        key_findings.append(f)
+                        suggested_actions.append({
+                            "action": "deep_analysis",
+                            "target": f.get("file_path", ""),
+                            "reason": f.get("title", "需要深入分析")
+                        })
+
+            # 推荐的工具
+            recommended_tools = recon_data.get("recommended_tools", {})
+            if recommended_tools:
+                context_data["recommended_tools"] = recommended_tools
+
+        # 从 Analysis 结果构建 handoff（给 Verification）
+        elif target_agent == "verification":
+            # 先添加 Recon 的信息（如果有）
+            if "recon" in self._agent_results:
+                recon_data = self._agent_results["recon"]
+                context_data["tech_stack"] = recon_data.get("tech_stack", {})
+                context_data["entry_points"] = recon_data.get("entry_points", [])[:10]
+
+            # 添加 Analysis 的信息
+            if "analysis" in self._agent_results:
+                analysis_data = self._agent_results["analysis"]
+
+                work_completed.append("完成代码深度分析")
+
+                findings = analysis_data.get("findings", [])
+                if findings:
+                    work_completed.append(f"发现 {len(findings)} 个潜在漏洞")
+
+                    # 按严重程度排序，优先验证高危漏洞
+                    severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+                    sorted_findings = sorted(
+                        findings,
+                        key=lambda x: severity_order.get(x.get("severity", "low"), 3)
+                    )
+
+                    for f in sorted_findings[:15]:
+                        if isinstance(f, dict):
+                            key_findings.append(f)
+                            suggested_actions.append({
+                                "action": "verify",
+                                "target": f.get("file_path", ""),
+                                "vulnerability_type": f.get("vulnerability_type", "unknown"),
+                                "priority": "high" if f.get("severity") in ["critical", "high"] else "normal"
+                            })
+
+                    # 统计严重程度分布
+                    severity_counts = {}
+                    for f in findings:
+                        sev = f.get("severity", "unknown")
+                        severity_counts[sev] = severity_counts.get(sev, 0) + 1
+
+                    insights.append(
+                        f"漏洞分布: Critical={severity_counts.get('critical', 0)}, "
+                        f"High={severity_counts.get('high', 0)}, "
+                        f"Medium={severity_counts.get('medium', 0)}, "
+                        f"Low={severity_counts.get('low', 0)}"
+                    )
+
+            # 也包含已有的发现（可能来自多个 Agent）
+            if self._all_findings:
+                context_data["all_findings"] = self._all_findings[:20]
+
+        # 如果没有任何工作记录，说明没有前序信息
+        if not work_completed and not key_findings:
+            return None
+
+        # 构建 TaskHandoff
+        summary = f"任务: {task[:100]}"
+        if work_completed:
+            summary = f"前序工作已完成: {', '.join(work_completed[:3])}"
+
+        return TaskHandoff(
+            from_agent="Orchestrator",
+            to_agent=target_agent,
+            summary=summary,
+            work_completed=work_completed,
+            key_findings=key_findings,
+            insights=insights,
+            suggested_actions=suggested_actions,
+            attention_points=attention_points,
+            priority_areas=priority_areas,
+            context_data=context_data,
+            confidence=0.85,
+        )

@@ -17,7 +17,7 @@ import re
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
-from .base import BaseAgent, AgentConfig, AgentResult, AgentType, AgentPattern
+from .base import BaseAgent, AgentConfig, AgentResult, AgentType, AgentPattern, TaskHandoff
 from ..json_parser import AgentJsonParser
 from ..prompts import CORE_SECURITY_PRINCIPLES, VULNERABILITY_PRIORITIES
 
@@ -789,6 +789,9 @@ Final Answer:""",
             # 🔥 CRITICAL: Log final findings count before returning
             logger.info(f"[{self.name}] Returning {len(standardized_findings)} standardized findings")
 
+            # 🔥 创建 TaskHandoff - 传递给 Verification Agent
+            handoff = self._create_analysis_handoff(standardized_findings)
+
             return AgentResult(
                 success=True,
                 data={
@@ -807,6 +810,7 @@ Final Answer:""",
                 tool_calls=self._tool_calls,
                 tokens_used=self._total_tokens,
                 duration_ms=duration_ms,
+                handoff=handoff,  # 🔥 添加 handoff
             )
             
         except Exception as e:
@@ -816,7 +820,103 @@ Final Answer:""",
     def get_conversation_history(self) -> List[Dict[str, str]]:
         """获取对话历史"""
         return self._conversation_history
-    
+
     def get_steps(self) -> List[AnalysisStep]:
         """获取执行步骤"""
         return self._steps
+
+    def _create_analysis_handoff(self, findings: List[Dict[str, Any]]) -> TaskHandoff:
+        """
+        创建 Analysis Agent 的任务交接信息
+
+        Args:
+            findings: 分析发现的漏洞列表
+
+        Returns:
+            TaskHandoff 对象，供 Verification Agent 使用
+        """
+        # 按严重程度排序
+        severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+        sorted_findings = sorted(
+            findings,
+            key=lambda x: severity_order.get(x.get("severity", "low"), 3)
+        )
+
+        # 提取关键发现（优先高危漏洞）
+        key_findings = sorted_findings[:15]
+
+        # 构建建议行动 - 哪些漏洞需要优先验证
+        suggested_actions = []
+        for f in sorted_findings[:10]:
+            suggested_actions.append({
+                "action": "verify_vulnerability",
+                "target": f.get("file_path", ""),
+                "line": f.get("line_start", 0),
+                "vulnerability_type": f.get("vulnerability_type", "unknown"),
+                "severity": f.get("severity", "medium"),
+                "priority": "high" if f.get("severity") in ["critical", "high"] else "normal",
+                "reason": f.get("title", "需要验证")
+            })
+
+        # 统计漏洞类型和严重程度
+        severity_counts = {}
+        type_counts = {}
+        for f in findings:
+            sev = f.get("severity", "unknown")
+            vtype = f.get("vulnerability_type", "unknown")
+            severity_counts[sev] = severity_counts.get(sev, 0) + 1
+            type_counts[vtype] = type_counts.get(vtype, 0) + 1
+
+        # 构建洞察
+        insights = [
+            f"发现 {len(findings)} 个潜在漏洞需要验证",
+            f"严重程度分布: Critical={severity_counts.get('critical', 0)}, "
+            f"High={severity_counts.get('high', 0)}, "
+            f"Medium={severity_counts.get('medium', 0)}, "
+            f"Low={severity_counts.get('low', 0)}",
+        ]
+
+        # 最常见的漏洞类型
+        if type_counts:
+            top_types = sorted(type_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+            insights.append(f"主要漏洞类型: {', '.join([f'{t}({c})' for t, c in top_types])}")
+
+        # 需要关注的文件
+        attention_points = []
+        files_with_findings = {}
+        for f in findings:
+            fp = f.get("file_path", "")
+            if fp:
+                files_with_findings[fp] = files_with_findings.get(fp, 0) + 1
+
+        for fp, count in sorted(files_with_findings.items(), key=lambda x: x[1], reverse=True)[:10]:
+            attention_points.append(f"{fp} ({count}个漏洞)")
+
+        # 优先验证的区域 - 高危漏洞所在文件
+        priority_areas = []
+        for f in sorted_findings[:10]:
+            if f.get("severity") in ["critical", "high"]:
+                fp = f.get("file_path", "")
+                if fp and fp not in priority_areas:
+                    priority_areas.append(fp)
+
+        # 上下文数据
+        context_data = {
+            "severity_distribution": severity_counts,
+            "vulnerability_types": type_counts,
+            "files_with_findings": files_with_findings,
+        }
+
+        # 构建摘要
+        high_count = severity_counts.get("critical", 0) + severity_counts.get("high", 0)
+        summary = f"完成代码分析: 发现{len(findings)}个漏洞, 其中{high_count}个高危"
+
+        return self.create_handoff(
+            to_agent="verification",
+            summary=summary,
+            key_findings=key_findings,
+            suggested_actions=suggested_actions,
+            attention_points=attention_points,
+            priority_areas=priority_areas,
+            context_data=context_data,
+        )

@@ -17,7 +17,7 @@ import re
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
-from .base import BaseAgent, AgentConfig, AgentResult, AgentType, AgentPattern
+from .base import BaseAgent, AgentConfig, AgentResult, AgentType, AgentPattern, TaskHandoff
 from ..json_parser import AgentJsonParser
 from ..prompts import TOOL_USAGE_GUIDE
 
@@ -641,17 +641,20 @@ Final Answer:""",
             # 🔥 记录工作和洞察
             self.record_work(f"完成项目信息收集，发现 {len(final_result.get('entry_points', []))} 个入口点")
             self.record_work(f"识别技术栈: {final_result.get('tech_stack', {})}")
-            
+
             if final_result.get("high_risk_areas"):
                 self.add_insight(f"发现 {len(final_result['high_risk_areas'])} 个高风险区域需要重点分析")
             if final_result.get("initial_findings"):
                 self.add_insight(f"初步发现 {len(final_result['initial_findings'])} 个潜在问题")
-            
+
             await self.emit_event(
                 "info",
                 f"Recon Agent 完成: {self._iteration} 轮迭代, {self._tool_calls} 次工具调用"
             )
-            
+
+            # 🔥 创建 TaskHandoff - 传递给下游 Agent
+            handoff = self._create_recon_handoff(final_result)
+
             return AgentResult(
                 success=True,
                 data=final_result,
@@ -659,6 +662,7 @@ Final Answer:""",
                 tool_calls=self._tool_calls,
                 tokens_used=self._total_tokens,
                 duration_ms=duration_ms,
+                handoff=handoff,  # 🔥 添加 handoff
             )
             
         except Exception as e:
@@ -769,7 +773,72 @@ Final Answer:""",
     def get_conversation_history(self) -> List[Dict[str, str]]:
         """获取对话历史"""
         return self._conversation_history
-    
+
     def get_steps(self) -> List[ReconStep]:
         """获取执行步骤"""
         return self._steps
+
+    def _create_recon_handoff(self, final_result: Dict[str, Any]) -> TaskHandoff:
+        """
+        创建 Recon Agent 的任务交接信息
+
+        Args:
+            final_result: Recon 收集的最终结果
+
+        Returns:
+            TaskHandoff 对象，供 Analysis Agent 使用
+        """
+        # 提取关键发现
+        key_findings = []
+        for f in final_result.get("initial_findings", [])[:10]:
+            if isinstance(f, dict):
+                key_findings.append(f)
+
+        # 构建建议行动
+        suggested_actions = []
+        for area in final_result.get("high_risk_areas", [])[:10]:
+            if isinstance(area, str):
+                suggested_actions.append({
+                    "action": "deep_analysis",
+                    "target": area,
+                    "reason": "高风险区域需要深入分析"
+                })
+
+        # 提取入口点作为关注点
+        attention_points = []
+        for ep in final_result.get("entry_points", [])[:15]:
+            if isinstance(ep, dict):
+                attention_points.append(
+                    f"[{ep.get('type', 'unknown')}] {ep.get('file', '')}:{ep.get('line', '')}"
+                )
+
+        # 构建上下文数据
+        context_data = {
+            "tech_stack": final_result.get("tech_stack", {}),
+            "project_structure": final_result.get("project_structure", {}),
+            "recommended_tools": final_result.get("recommended_tools", {}),
+            "dependencies": final_result.get("dependencies", {}),
+        }
+
+        # 构建摘要
+        tech_stack = final_result.get("tech_stack", {})
+        languages = tech_stack.get("languages", [])
+        frameworks = tech_stack.get("frameworks", [])
+
+        summary = f"完成项目侦察: "
+        if languages:
+            summary += f"语言={', '.join(languages[:3])}; "
+        if frameworks:
+            summary += f"框架={', '.join(frameworks[:3])}; "
+        summary += f"入口点={len(final_result.get('entry_points', []))}个; "
+        summary += f"高风险区域={len(final_result.get('high_risk_areas', []))}个"
+
+        return self.create_handoff(
+            to_agent="analysis",
+            summary=summary,
+            key_findings=key_findings,
+            suggested_actions=suggested_actions,
+            attention_points=attention_points,
+            priority_areas=final_result.get("high_risk_areas", [])[:15],
+            context_data=context_data,
+        )

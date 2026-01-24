@@ -18,7 +18,7 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from .base import BaseAgent, AgentConfig, AgentResult, AgentType, AgentPattern
+from .base import BaseAgent, AgentConfig, AgentResult, AgentType, AgentPattern, TaskHandoff
 from ..json_parser import AgentJsonParser
 from ..prompts import CORE_SECURITY_PRINCIPLES, VULNERABILITY_PRIORITIES
 
@@ -901,7 +901,7 @@ class VerificationAgent(BaseAgent):
             confirmed_count = len([f for f in verified_findings if f.get("verdict") == "confirmed"])
             likely_count = len([f for f in verified_findings if f.get("verdict") == "likely"])
             false_positive_count = len([f for f in verified_findings if f.get("verdict") == "false_positive"])
-            
+
             await self.emit_event(
                 "info",
                 f"Verification Agent 完成: {confirmed_count} 确认, {likely_count} 可能, {false_positive_count} 误报"
@@ -909,6 +909,11 @@ class VerificationAgent(BaseAgent):
 
             # 🔥 CRITICAL: Log final findings count before returning
             logger.info(f"[{self.name}] Returning {len(verified_findings)} verified findings")
+
+            # 🔥 创建 TaskHandoff - 记录验证结果，供 Orchestrator 汇总
+            handoff = self._create_verification_handoff(
+                verified_findings, confirmed_count, likely_count, false_positive_count
+            )
 
             return AgentResult(
                 success=True,
@@ -922,6 +927,7 @@ class VerificationAgent(BaseAgent):
                 tool_calls=self._tool_calls,
                 tokens_used=self._total_tokens,
                 duration_ms=duration_ms,
+                handoff=handoff,  # 🔥 添加 handoff
             )
             
         except Exception as e:
@@ -963,7 +969,117 @@ class VerificationAgent(BaseAgent):
     def get_conversation_history(self) -> List[Dict[str, str]]:
         """获取对话历史"""
         return self._conversation_history
-    
+
     def get_steps(self) -> List[VerificationStep]:
         """获取执行步骤"""
         return self._steps
+
+    def _create_verification_handoff(
+        self,
+        verified_findings: List[Dict[str, Any]],
+        confirmed_count: int,
+        likely_count: int,
+        false_positive_count: int,
+    ) -> TaskHandoff:
+        """
+        创建 Verification Agent 的任务交接信息
+
+        Args:
+            verified_findings: 验证后的发现列表
+            confirmed_count: 确认的漏洞数量
+            likely_count: 可能的漏洞数量
+            false_positive_count: 误报数量
+
+        Returns:
+            TaskHandoff 对象，供 Orchestrator 汇总
+        """
+        # 按验证结果分类
+        confirmed = [f for f in verified_findings if f.get("verdict") == "confirmed"]
+        likely = [f for f in verified_findings if f.get("verdict") == "likely"]
+        false_positives = [f for f in verified_findings if f.get("verdict") == "false_positive"]
+
+        # 提取关键发现（已确认的高危漏洞）
+        key_findings = []
+        for f in confirmed:
+            if f.get("severity") in ["critical", "high"]:
+                key_findings.append(f)
+        # 如果高危不够，添加其他确认的漏洞
+        if len(key_findings) < 10:
+            for f in confirmed:
+                if f not in key_findings:
+                    key_findings.append(f)
+                    if len(key_findings) >= 10:
+                        break
+
+        # 构建建议行动 - 修复建议
+        suggested_actions = []
+        for f in confirmed[:10]:
+            suggestion = f.get("suggestion", "") or f.get("recommendation", "")
+            suggested_actions.append({
+                "action": "fix_vulnerability",
+                "target": f.get("file_path", ""),
+                "line": f.get("line_start", 0),
+                "vulnerability_type": f.get("vulnerability_type", "unknown"),
+                "severity": f.get("severity", "medium"),
+                "recommendation": suggestion[:200] if suggestion else "请根据漏洞类型进行修复"
+            })
+
+        # 构建洞察
+        insights = [
+            f"验证完成: {confirmed_count}个确认, {likely_count}个可能, {false_positive_count}个误报",
+            f"验证准确率: {(confirmed_count + likely_count) / len(verified_findings) * 100:.1f}%" if verified_findings else "无数据",
+        ]
+
+        # 统计各类型漏洞
+        type_counts = {}
+        for f in confirmed + likely:
+            vtype = f.get("vulnerability_type", "unknown")
+            type_counts[vtype] = type_counts.get(vtype, 0) + 1
+        if type_counts:
+            top_types = sorted(type_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+            insights.append(f"主要漏洞类型: {', '.join([f'{t}({c})' for t, c in top_types])}")
+
+        # 需要关注的文件（有确认漏洞的文件）
+        attention_points = []
+        files_with_confirmed = {}
+        for f in confirmed:
+            fp = f.get("file_path", "")
+            if fp:
+                files_with_confirmed[fp] = files_with_confirmed.get(fp, 0) + 1
+        for fp, count in sorted(files_with_confirmed.items(), key=lambda x: x[1], reverse=True)[:10]:
+            attention_points.append(f"{fp} ({count}个确认漏洞)")
+
+        # 优先修复的区域
+        priority_areas = []
+        for f in confirmed:
+            if f.get("severity") in ["critical", "high"]:
+                fp = f.get("file_path", "")
+                if fp and fp not in priority_areas:
+                    priority_areas.append(fp)
+
+        # 上下文数据
+        context_data = {
+            "confirmed_count": confirmed_count,
+            "likely_count": likely_count,
+            "false_positive_count": false_positive_count,
+            "vulnerability_types": type_counts,
+            "files_with_confirmed": files_with_confirmed,
+            "poc_generated": len([f for f in verified_findings if f.get("poc_code")]),
+        }
+
+        # 构建摘要
+        summary = f"验证完成: {confirmed_count}个确认漏洞, {likely_count}个可能漏洞"
+        if confirmed_count > 0:
+            high_count = len([f for f in confirmed if f.get("severity") in ["critical", "high"]])
+            if high_count > 0:
+                summary += f", 其中{high_count}个高危"
+
+        return self.create_handoff(
+            to_agent="orchestrator",
+            summary=summary,
+            key_findings=key_findings,
+            suggested_actions=suggested_actions,
+            attention_points=attention_points,
+            priority_areas=priority_areas,
+            context_data=context_data,
+        )
