@@ -495,7 +495,7 @@ DeepSeek-Coder · Codestral<br/>
 <div align="center">
 
 **欢迎大家来和我交流探讨！无论是技术问题、功能建议还是合作意向，都期待与你沟通~**
-（项目开发、投资孵化等合作洽谈请通过邮箱联系）
+（平台定制、代码审计服务、技术咨询、合作洽谈等请通过邮箱联系）
 | 联系方式 | |
 |:---:|:---:|
 | 📧 **邮箱** | **lintsinghua@qq.com** |
@@ -507,7 +507,7 @@ DeepSeek-Coder · Codestral<br/>
 
 <div align="center">
 
-**欢迎大家入群交流分享、学习、摸鱼~**
+**欢迎大家入群交流分享、学习、摸鱼~群主就是作者**
 
 <img src="frontend/public/images/DeepAudit群聊.png" alt="QQ交流群" width="200">
 
