@@ -2202,36 +2202,45 @@ async def get_task_summary(
     )
 
 
-@router.patch("/{task_id}/findings/{finding_id}/status")
+@router.patch("/{task_id}/findings/{finding_id}")
 async def update_finding_status(
     task_id: str,
     finding_id: str,
-    status: str,
+    body: dict,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     """
     更新发现状态
     """
+    status = body.get("status")
+    if not status:
+        raise HTTPException(status_code=400, detail="缺少 status 字段")
+
     task = await db.get(AgentTask, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
-    
+
     project = await db.get(Project, task.project_id)
     if not project or project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="无权操作")
-    
+
     finding = await db.get(AgentFinding, finding_id)
     if not finding or finding.task_id != task_id:
         raise HTTPException(status_code=404, detail="发现不存在")
-    
-    try:
-        finding.status = FindingStatus(status)
-    except ValueError:
+
+    VALID_FINDING_STATUSES = {
+        FindingStatus.NEW, FindingStatus.ANALYZING, FindingStatus.VERIFIED,
+        FindingStatus.FALSE_POSITIVE, FindingStatus.NEEDS_REVIEW,
+        FindingStatus.FIXED, FindingStatus.WONT_FIX, FindingStatus.DUPLICATE,
+    }
+    if status not in VALID_FINDING_STATUSES:
         raise HTTPException(status_code=400, detail=f"无效的状态: {status}")
-    
+
+    finding.status = status
+
     await db.commit()
-    
+
     return {"message": "状态已更新", "finding_id": finding_id, "status": status}
 
 

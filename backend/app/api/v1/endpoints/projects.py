@@ -199,7 +199,7 @@ async def get_stats(
     total_issues = len(issues) + len(agent_findings)
     resolved_issues = (
         len([i for i in issues if i.status == "resolved"]) +
-        len([f for f in agent_findings if f.status == "resolved"])
+        len([f for f in agent_findings if f.status in ("fixed", "wont_fix", "false_positive")])
     )
 
     # 计算平均质量分（只统计已完成且有质量分的任务）
