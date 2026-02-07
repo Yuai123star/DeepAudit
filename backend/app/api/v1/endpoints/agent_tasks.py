@@ -592,6 +592,7 @@ async def _execute_agent_task(task_id: str):
                 
                 # 计算安全评分
                 task.security_score = _calculate_security_score(findings)
+                task.quality_score = _calculate_security_score(findings)
                 # 🔥 注意: progress_percentage 是计算属性，不需要手动设置
                 # 当 status = COMPLETED 时会自动返回 100.0
                 
