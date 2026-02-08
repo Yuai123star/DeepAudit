@@ -503,16 +503,6 @@ DeepSeek-Coder · Codestral<br/>
 
 </div>
 
-### 💬 交流群
-
-<div align="center">
-
-**欢迎大家入群交流分享、学习、摸鱼~群主就是作者**
-
-<img src="frontend/public/images/DeepAudit群聊.png" alt="QQ交流群" width="200">
-
-</div>
-
 ## 📄 许可证
 
 本项目采用 [AGPL-3.0 License](LICENSE) 开源。
