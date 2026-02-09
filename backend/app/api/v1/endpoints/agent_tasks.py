@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 from typing import Any, List, Optional, Dict, Set
 from datetime import datetime, timezone
@@ -2248,6 +2249,123 @@ async def update_finding_status(
 
 # ============ Helper Functions ============
 
+def validate_git_url(url: str) -> bool:
+    """
+    验证 Git URL 是否安全
+    
+    Args:
+        url: Git URL
+        
+    Returns:
+        bool: URL 是否安全
+    """
+    if not url:
+        return False
+    
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    
+    # 只允许 http, https, git, ssh 协议
+    allowed_schemes = {'http', 'https', 'git', 'ssh', 'git@'}
+    if parsed.scheme and parsed.scheme not in allowed_schemes:
+        return False
+    
+    # 检查是否包含可疑的命令注入字符
+    dangerous_patterns = [';', '|', '&', '$(', '`', '\n', '\r', '\t']
+    for pattern in dangerous_patterns:
+        if pattern in url:
+            return False
+    
+    return True
+
+def validate_branch_name(branch: str) -> bool:
+    """
+    验证 Git 分支名称是否安全
+    
+    Args:
+        branch: 分支名称
+        
+    Returns:
+        bool: 分支名称是否安全
+    """
+    if not branch:
+        return False
+    
+    # Git 分支名称规则：只允许字母、数字、下划线、连字符、点、斜杠
+    # 参考: https://git-scm.com/docs/git-check-ref-format
+    pattern = r'^[a-zA-Z0-9_\-\.\/]+$'
+    if not re.match(pattern, branch):
+        return False
+    
+    # 防止路径遍历
+    if '..' in branch or branch.startswith('/') or branch.endswith('/'):
+        return False
+    
+    # 限制长度
+    if len(branch) > 256:
+        return False
+    
+    return True
+
+def is_path_safe(base_path: str, target_path: str) -> bool:
+    """
+    检查目标路径是否在基础目录内（防止路径遍历）
+    
+    Args:
+        base_path: 基础目录
+        target_path: 目标路径
+        
+    Returns:
+        bool: 路径是否安全
+    """
+    # 规范化路径
+    abs_base = os.path.abspath(base_path)
+    abs_target = os.path.abspath(os.path.join(base_path, target_path))
+    
+    # 检查目标路径是否在基础目录内
+    return abs_target.startswith(abs_base + os.sep) or abs_target == abs_base
+
+def safe_extract_zip(zip_ref: zipfile.ZipFile, extract_dir: str, task_id: str) -> None:
+    """
+    安全解压 ZIP 文件，防止 Zip Slip 攻击
+    
+    Args:
+        zip_ref: ZipFile 对象
+        extract_dir: 解压目标目录
+        task_id: 任务 ID（用于取消检查）
+    """
+    def check_cancelled():
+        if is_task_cancelled(task_id):
+            raise asyncio.CancelledError("任务已取消")
+    
+    file_list = zip_ref.namelist()
+    
+    # 找到公共前缀
+    if file_list:
+        common_prefix = file_list[0].split('/')[0] + '/'
+        
+        for i, file_name in enumerate(file_list):
+            if i % 50 == 0:
+                check_cancelled()
+            
+            # 去掉公共前缀
+            if file_name.startswith(common_prefix):
+                target_path = file_name[len(common_prefix):]
+                if target_path:
+                    full_target = os.path.join(extract_dir, target_path)
+                    
+                    # 🔥 安全检查：防止路径遍历
+                    if not is_path_safe(extract_dir, target_path):
+                        logger.warning(f"⚠️ 检测到路径遍历攻击: {file_name}")
+                        continue
+                    
+                    if file_name.endswith('/'):
+                        os.makedirs(full_target, exist_ok=True)
+                    else:
+                        os.makedirs(os.path.dirname(full_target), exist_ok=True)
+                        with zip_ref.open(file_name) as src, open(full_target, 'wb') as dst:
+                            dst.write(src.read())
+
 async def _get_project_root(
     project: Project,
     task_id: str,
@@ -2346,6 +2464,12 @@ async def _get_project_root(
         repo_url = project.repository_url
         repo_type = project.repository_type or "other"
 
+        # 🔥 安全验证：检查 Git URL 是否安全
+        if not validate_git_url(repo_url):
+            logger.error(f"❌ 无效的 Git URL: {repo_url}")
+            await emit(f"❌ 无效的仓库 URL", "error")
+            raise RuntimeError(f"无效的仓库 URL: {repo_url}")
+
         await emit(f"🔄 正在获取仓库: {repo_url}")
 
         # 检测是否为SSH URL（SSH链接不支持ZIP下载）
@@ -2362,9 +2486,16 @@ async def _get_project_root(
         # 构建分支尝试顺序
         branches_to_try = []
         if branch_name:
+            # 🔥 安全验证：检查分支名称是否安全
+            if not validate_branch_name(branch_name):
+                logger.error(f"❌ 无效的分支名称: {branch_name}")
+                await emit(f"❌ 无效的分支名称", "error")
+                raise RuntimeError(f"无效的分支名称: {branch_name}")
             branches_to_try.append(branch_name)
         if project.default_branch and project.default_branch not in branches_to_try:
-            branches_to_try.append(project.default_branch)
+            # 🔥 安全验证：检查默认分支名称是否安全
+            if validate_branch_name(project.default_branch):
+                branches_to_try.append(project.default_branch)
         for common_branch in ["main", "master"]:
             if common_branch not in branches_to_try:
                 branches_to_try.append(common_branch)
@@ -2442,25 +2573,8 @@ async def _get_project_root(
                         # 解压 ZIP
                         check_cancelled()
                         with zipfile.ZipFile(zip_temp_path, 'r') as zip_ref:
-                            # ZIP 内通常有一个根目录如 repo-branch/
-                            file_list = zip_ref.namelist()
-                            # 找到公共前缀
-                            if file_list:
-                                common_prefix = file_list[0].split('/')[0] + '/'
-                                for i, file_name in enumerate(file_list):
-                                    if i % 50 == 0:
-                                        check_cancelled()
-                                    # 去掉公共前缀
-                                    if file_name.startswith(common_prefix):
-                                        target_path = file_name[len(common_prefix):]
-                                        if target_path:  # 跳过空路径（根目录本身）
-                                            full_target = os.path.join(base_path, target_path)
-                                            if file_name.endswith('/'):
-                                                os.makedirs(full_target, exist_ok=True)
-                                            else:
-                                                os.makedirs(os.path.dirname(full_target), exist_ok=True)
-                                                with zip_ref.open(file_name) as src, open(full_target, 'wb') as dst:
-                                                    dst.write(src.read())
+                            # 🔥 使用安全解压函数，防止 Zip Slip 攻击
+                            safe_extract_zip(zip_ref, base_path, task_id)
 
                         # 清理临时文件
                         os.remove(zip_temp_path)
