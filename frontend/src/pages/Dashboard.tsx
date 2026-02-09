@@ -178,6 +178,8 @@ export default function Dashboard() {
         return <Badge className="cyber-badge-info">运行中</Badge>;
       case 'failed':
         return <Badge className="cyber-badge-danger">失败</Badge>;
+      case 'cancelled':
+        return <Badge className="cyber-badge-muted">已取消</Badge>;
       case 'paused':
         return <Badge className="cyber-badge-muted">已暂停</Badge>;
       default:
