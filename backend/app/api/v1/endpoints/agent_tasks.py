@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import zipfile
 import shutil
 from typing import Any, List, Optional, Dict, Set
 from datetime import datetime, timezone
