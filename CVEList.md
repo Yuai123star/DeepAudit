@@ -14,7 +14,7 @@
 
 | CVE | 项目名称 | 项目热度 | 漏洞类型 | CVSS | 发现者 |
 |:---|:---|:---:|:---|:----:|:---|
-| [CVE-2026-1884](https://nvd.nist.gov/vuln/detail/cve-2026-1884) | Zentao PMS | [![Stars](https://img.shields.io/github/stars/easysoft/zentaopms?style=social)](https://github.com/easysoft/zentaopms/stargazers) | SSRF | 5.1  | ez-lbz |
+| [CVE-2026-1884](https://nvd.nist.gov/vuln/detail/cve-2026-1884) | [Zentao PMS](https://github.com/easysoft/zentaopms) | [![Stars](https://img.shields.io/github/stars/easysoft/zentaopms?style=social)](https://github.com/easysoft/zentaopms/stargazers) | SSRF | 5.1  | ez-lbz |
 | [CVE-2025-13789](https://nvd.nist.gov/vuln/detail/CVE-2025-13789) | [Zentao PMS](https://github.com/easysoft/zentaopms) | [![Stars](https://img.shields.io/github/stars/easysoft/zentaopms?style=social)](https://github.com/easysoft/zentaopms/stargazers) | SSRF | 5.3  | ez-lbz |
 | [CVE-2025-13787](https://nvd.nist.gov/vuln/detail/CVE-2025-13787) | [Zentao PMS](https://github.com/easysoft/zentaopms) | [![Stars](https://img.shields.io/github/stars/easysoft/zentaopms?style=social)](https://github.com/easysoft/zentaopms/stargazers) | Privilege Escalation | 9.1  | ez-lbz |
 | [CVE-2025-64428](https://nvd.nist.gov/vuln/detail/CVE-2025-64428) | [Dataease](https://github.com/dataease/dataease) | [![Stars](https://img.shields.io/github/stars/dataease/dataease?style=social)](https://github.com/dataease/dataease/stargazers) | JNDI Injection | 9.8  | ez-lbz |
