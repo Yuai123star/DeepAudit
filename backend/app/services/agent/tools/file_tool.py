@@ -329,8 +329,9 @@ class FileSearchTool(AgentTool):
         try:
             # 确定搜索目录
             if directory:
-                search_dir = os.path.normpath(os.path.join(self.project_root, directory))
-                if not search_dir.startswith(os.path.normpath(self.project_root)):
+                # Security Fix: 使用 realpath 解析软链接，防止绕过项目根目录检查
+                search_dir = os.path.realpath(os.path.join(self.project_root, directory))
+                if not search_dir.startswith(os.path.realpath(self.project_root)):
                     return ToolResult(
                         success=False,
                         error="安全错误：不允许搜索项目目录外的内容",
