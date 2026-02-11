@@ -90,7 +90,7 @@
 
 <div align="center">
 
-### **DeepAudit 已成功发现并获得 48 个 CVE 编号，涉及 16 个知名开源项目**
+### **DeepAudit 已成功发现并获得 49 个 CVE 编号，涉及 16 个知名开源项目**
 
 </div>
 
