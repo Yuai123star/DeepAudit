@@ -90,8 +90,8 @@
 
 <div align="center">
 
-### **DeepAudit 已成功发现并获得 49 个 CVE 编号 和 6 个 GHSA 安全公告涉及17个知名开源项目**
-**17个知名开源项目**
+### **DeepAudit 已成功发现并获得 49 个 CVE 编号 和 6 个 GHSA 安全公告**
+### **涉及17个知名开源项目**
 </div>
 
 #### OpenClaw 漏洞挖掘成果
@@ -161,7 +161,7 @@ DeepAudit 内测版本对 [OpenClaw](https://github.com/openclaw/openclaw) 项�
 
 👉 [查看完整 CVE 列表详情](CVEList.md)
 
-> *以上漏洞由 DeepAudit 团队成员 [@ez-lbz](https://github.com/ez-lbz) 使用 DeepAudit 挖掘发现*
+> *以上漏洞由 DeepAudit 团队成员 [@lintsinghua](https://github.com/lintsinghua) [@ez-lbz](https://github.com/ez-lbz) 使用 DeepAudit 挖掘发现*
 
 > 如果您使用 DeepAudit 发现了漏洞，欢迎在  [Issues](https://github.com/lintsinghua/DeepAudit/issues/135)  中留言反馈。您的贡献将极大地丰富这份漏洞列表，非常感谢！
 
