@@ -90,8 +90,8 @@
 
 <div align="center">
 
-### **DeepAudit 已成功发现并获得 49 个 CVE 编号 和 6 个 GHSA 安全公告，涉及 17 个知名开源项目**
-
+### **DeepAudit 已成功发现并获得 49 个 CVE 编号 和 6 个 GHSA 安全公告涉及17个知名开源项目**
+**17个知名开源项目**
 </div>
 
 #### OpenClaw 漏洞挖掘成果
