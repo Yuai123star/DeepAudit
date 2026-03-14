@@ -90,11 +90,11 @@
 
 <div align="center">
 
-### **DeepAudit 已成功发现并获得 49 个 CVE 编号 和 6 个 GHSA 安全公告**
+### **DeepAudit 已成功发现并获得 49 个 CVE 编号 和 6 个 GHSA 安全公告🦞**
 ### **涉及17个知名开源项目**
 </div>
 
-#### OpenClaw 漏洞挖掘成果
+#### OpenClaw🦞 漏洞挖掘成果
 
 DeepAudit 内测版本对 [OpenClaw](https://github.com/openclaw/openclaw) 项目进行了深度安全审计，目前已发现 **6 个安全漏洞**，均已被官方确认并发布安全公告（GHSA）。漏洞类型覆盖命令注入、签名验证绕过、远程代码执行、凭证泄露、资源耗尽及敏感信息泄露，其中包含多个 High 级别漏洞。更多漏洞仍在持续挖掘中。
 
