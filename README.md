@@ -80,8 +80,6 @@
 
 *一键导出 PDF / Markdown / JSON*（图中为快速模式，非Agent模式报告）
 
-👉 [查看Agent审计完整报告示例](https://lintsinghua.github.io/)
-
 </div>
 
 ---
