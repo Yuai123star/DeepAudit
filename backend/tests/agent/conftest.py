@@ -189,14 +189,59 @@ requests>=2.28.0
     shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+async def _mock_stream_generator(chunks):
+    """异步生成器，模拟 LLM 流式输出"""
+    for chunk in chunks:
+        yield chunk
+
+
 @pytest.fixture
 def mock_llm_service():
     """模拟 LLM 服务"""
     service = MagicMock()
+
+    # mock chat_completion_raw（部分代码路径仍在使用）
     service.chat_completion_raw = AsyncMock(return_value={
         "content": "测试响应",
         "usage": {"total_tokens": 100},
     })
+
+    # mock chat_completion_stream - Agent 的 stream_llm_call 使用此方法
+    # 返回一个 async generator，模拟 LLM 返回 ReAct 格式的工具调用和最终答案
+    def _make_stream_response(text):
+        """生成模拟的流式响应 chunks"""
+        return [
+            {"type": "token", "content": text, "accumulated": text},
+            {"type": "done", "content": text, "usage": {"total_tokens": 100}},
+        ]
+
+    # 第一次调用: 返回 list_files 工具调用
+    tool_call_text = (
+        'Thought: 我需要查看项目结构\n'
+        'Action: list_files\n'
+        'Action Input: {"directory": "."}'
+    )
+    # 第二次调用: 返回 Final Answer
+    final_answer_text = (
+        'Thought: 已收集到项目信息\n'
+        'Final Answer: {"project_structure": {"src": ["sql_vuln.py", "cmd_vuln.py"]}, '
+        '"tech_stack": {"languages": ["Python"], "frameworks": [], "databases": []}, '
+        '"entry_points": [], "high_risk_areas": ["src/sql_vuln.py:1 - SQL注入风险"], '
+        '"dependencies": {}, "initial_findings": [], "summary": "Python项目，包含SQL注入和命令注入漏洞"}'
+    )
+
+    call_count = 0
+
+    def _stream_side_effect(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return _mock_stream_generator(_make_stream_response(tool_call_text))
+        else:
+            return _mock_stream_generator(_make_stream_response(final_answer_text))
+
+    service.chat_completion_stream = MagicMock(side_effect=_stream_side_effect)
+
     return service
 
 
