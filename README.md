@@ -88,7 +88,7 @@
 
 <div align="center">
 
-### **DeepAudit 已成功发现并获得 49 个 CVE 编号 和 6 个 GHSA 安全公告🦞**
+### **DeepAudit（闭源版本） 已成功发现并获得 49 个 CVE 编号 和 6 个 GHSA 安全公告🦞**
 ### **涉及17个知名开源项目**
 </div>
 
